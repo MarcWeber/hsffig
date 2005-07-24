@@ -1,0 +1,36 @@
+Name:		HSFFIG
+Version:	1.0
+License:	BSD3
+License-file:	License.txt
+Copyright:	2005, Dimitry Golubovsky
+Author:		Dimitry Golubovsky
+Maintainer:	golubovsky@gmail.com
+Stability:	experimental
+Homepage:	hsffig.sourceforge.net
+Synopsis:	A tool which reads a C include file and generates FFI import declarations
+Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes a 
+		C library include file (.h) and generates Haskell Foreign Functions Interface 
+		import declarations for all functions, #define's (where possible), enumerations, 
+		and structures/unions (to access their members). It is assumed that the GNU C 
+		Compiler and Preprocessor are used. Auto-generated Haskell modules may be 
+		imported into an application to get access to the foreign library's 
+		functions and variables.
+Tested-with:	GHC-6.2.2
+Build-depends:	base, parsec
+Exposed-modules:HSFFIG.FieldAccess
+
+Executable:	hsffig
+Main-is:	hsffig.hs
+Hs-source-dir:	programs
+Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc
+
+Executable:     testparser
+Main-is:        testparser.hs
+Hs-source-dir:  programs
+Other-modules:  C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds
+
+Executable:	splitter
+Main-is:	splitter.hs
+Hs-source-dir:	programs
+Other-modules:	SplitBounds
+

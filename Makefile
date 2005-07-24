@@ -8,4 +8,9 @@ cabal-setup:
 	echo 'Use it for building and installing the package'
 	echo 'Type \'cabal-setup --help\' for help'
 
+clean:
+	find . -name '*.o' -exec rm -f \{\} \;
+	find . -name '*.hi' -exec rm -f \{\} \;
+	-cabal-setup clean
+	rm -f cabal-setup
 
