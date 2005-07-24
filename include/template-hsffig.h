@@ -1,8 +1,3 @@
-/*
-  A customized template for hsc2hs addressing the issue
-  with commas within type definition.
-*/
-
 
 #if __GLASGOW_HASKELL__ && __GLASGOW_HASKELL__ < 409
 #include <Rts.h>

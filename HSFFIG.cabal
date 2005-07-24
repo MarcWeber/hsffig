@@ -19,13 +19,11 @@ Tested-with:	GHC==6.2.2
 Build-depends:	base, text
 Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses
-Include-dirs:	include
-Includes:	template-hsffig.h
 
 Executable:	hsffig
 Main-is:	hsffig.hs
 Hs-source-dir:	programs
-Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc
+Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template
 
 Executable:     testparser
 Main-is:        testparser.hs

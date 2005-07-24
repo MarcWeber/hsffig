@@ -5,6 +5,7 @@ module WriteHsc where
 import Char
 import C_BNF
 import SplitBounds
+import Template
 import System.Cmd
 import System.Exit
 import Data.FiniteMap
@@ -43,6 +44,7 @@ parts pred s = case dropWhile pred s of
 ghcopts = "{-# OPTIONS -fglasgow-exts -ffi #-}"
 
 writeModHdr mfn = do let fmfn = finalizeModuleName mfn
+                     writeTemplate
                      putStrLn $ ghcopts
                      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfn ++ "\n"
                      putStrLn $ ghcopts
@@ -223,18 +225,6 @@ writefields flds fn =
     fldata fld = do putStrLn $ "data V_" ++ fld ++ " = V_" ++ fld ++ " deriving (Show)"
                     putStrLn $ "data X_" ++ fld ++ " = X_" ++ fld ++ " deriving (Show)"
 
-writeclass fn = return () 
-{--
-  do putStrLn $ "class " ++ (finalizeModuleName fn) ++ "_fieldaccess a b c | a c -> b where"
-     putStrLn $ "  (==>) :: Ptr a -> c -> b"
-     putStrLn $ "  (-->) :: Ptr a -> c -> IO b"
-     putStrLn $ "  (<--) :: (Ptr a, c) -> b -> IO ()"
-     putStrLn $ "  (==>) _ _ = error \" illegal context for ==>\""
-     putStrLn $ "  (-->) _ _ = error \" illegal context for -->\""
-     putStrLn $ "  (<--) _ _ = error \" illegal context for <--\""
-     putStrLn ""
---}
-
 writeStructures tus tymap fn = 
   do let structs = filterFM structonly tymap
          typedefs = fmToList $ filterFM tdefonly tymap
@@ -252,7 +242,6 @@ writeStructures tus tymap fn =
      putStrLn $ "\n" ++ splitEnd
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "_cnt\n"
      writeSplitHeader [] $ fmfns ++ "_cnt"
-     writeclass fn
      writefields ("sizeof" : allfields) fn
      putStrLn ""
      mapM (tdefalias tymap) typedefs
