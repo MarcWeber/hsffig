@@ -17,8 +17,10 @@ Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes
 		functions and variables.
 Tested-with:	GHC==6.2.2
 Build-depends:	base, text
-Exposed-modules:HSFFIG.FieldAccess
+Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses
+Include-dirs:	include
+Includes:	template-hsffig.h
 
 Executable:	hsffig
 Main-is:	hsffig.hs

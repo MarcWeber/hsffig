@@ -12,6 +12,11 @@ import Data.Maybe
 import Data.List
 import Control.Monad
 
+-- Name for the HSFFIG field access class, and module to import
+
+fldclass = "HSFFIG.FieldAccess.FieldAccess"
+fldmodule = "HSFFIG.FieldAccess"
+
 -- A version of words, but works with any lists on any predicate.
 
 parts pred s = case dropWhile pred s of
@@ -55,6 +60,7 @@ writeModHdr mfn = do let fmfn = finalizeModuleName mfn
                      putStrLn $ "  module " ++ fmfn ++ "_E,"
                      putStrLn $ "  module " ++ fmfn ++ "_S_cnt,"
                      putStrLn $ splitClose
+                     putStrLn $ "  module " ++ fldmodule ++ ","
                      putStrLn $ "  module Foreign,"
                      putStrLn $ "  module Foreign.C.String,"
                      putStrLn $ "  module Foreign.C.Types) where"
@@ -63,12 +69,14 @@ writeModHdr mfn = do let fmfn = finalizeModuleName mfn
                      putStrLn $ "import Foreign.Ptr"
                      putStrLn $ "import Foreign.C.Types"
                      putStrLn $ "import Foreign.C.String"
+                     putStrLn $ "import " ++ fldmodule
                      putStrLn $ splitOpen
                      putStrLn $ "import " ++ fmfn ++ "_C"
                      putStrLn $ "import " ++ fmfn ++ "_S"
                      putStrLn $ "import " ++ fmfn ++ "_F"
                      putStrLn $ "import " ++ fmfn ++ "_E"
                      putStrLn $ "import " ++ fmfn ++ "_S_cnt"
+                     putStrLn $ "import " ++ fldmodule
                      putStrLn $ splitClose
                      putStrLn $ "\n" ++ splitEnd ++ "\n"
 
@@ -215,7 +223,8 @@ writefields flds fn =
     fldata fld = do putStrLn $ "data V_" ++ fld ++ " = V_" ++ fld ++ " deriving (Show)"
                     putStrLn $ "data X_" ++ fld ++ " = X_" ++ fld ++ " deriving (Show)"
 
-writeclass fn = 
+writeclass fn = return () 
+{--
   do putStrLn $ "class " ++ (finalizeModuleName fn) ++ "_fieldaccess a b c | a c -> b where"
      putStrLn $ "  (==>) :: Ptr a -> c -> b"
      putStrLn $ "  (-->) :: Ptr a -> c -> IO b"
@@ -224,6 +233,7 @@ writeclass fn =
      putStrLn $ "  (-->) _ _ = error \" illegal context for -->\""
      putStrLn $ "  (<--) _ _ = error \" illegal context for <--\""
      putStrLn ""
+--}
 
 writeStructures tus tymap fn = 
   do let structs = filterFM structonly tymap
@@ -282,7 +292,7 @@ onestruct tymap fn (strname,strdecl) =
      putStrLn "--"
      putStrLn ""
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ strm ++ "\n"
-     writeSplitHeader [fmfns ++ "_cnt"] strm
+     writeSplitHeader [fmfns ++ "_cnt", fldmodule] strm
      mapM (writegroupfld fn strname csyntax tymap) grpdecls
      when ((length grpdecls) /= 0) $ structinstance fn strname False "CInt" csyntax tymap 0 "sizeof"
      putStrLn $ splitEnd
@@ -372,7 +382,8 @@ structinstance fn strname flddyn fldtype csyntax tymap ary field = do
       isbitfld = '|' `elem` fldtype
       truestr = if (isanon strname) then csyntax else (truename strname)
       arglist = intlv (take ary $ map (('_' :) . show) [1..]) " "
-  putStrLn $ "\ninstance " ++ (finalizeModuleName fn) ++ "_fieldaccess " ++ 
+--  putStrLn $ "\ninstance " ++ (finalizeModuleName fn) ++ "_fieldaccess " ++
+  putStrLn $ "\ninstance " ++ fldclass ++ " " ++
              (convname strname) ++ " (" ++ fldtype' ++ ") V_" ++ field ++ " where"
   case isbitfld of
     True -> do let getbf = intern ++ (convname strname) ++ "___get___" ++ field ++ "___"
@@ -411,7 +422,8 @@ structinstance fn strname flddyn fldtype csyntax tymap ary field = do
                     makedynfld fldtype fldtype' mkfld
                     makewrpfld fldtype fldtype' wrfld
                     when (ary > 0) $ do
-                      putStrLn $ "\ninstance " ++ (finalizeModuleName fn) ++ "_fieldaccess " ++
+--                      putStrLn $ "\ninstance " ++ (finalizeModuleName fn) ++ "_fieldaccess " ++
+                      putStrLn $ "\ninstance " ++ fldclass ++ " " ++
                                  (convname strname) ++ " (" ++ fldtype' ++ ") X_" ++ 
                                  field ++ " where"
                       putStrLn $ "  z ==> X_" ++ field ++ " = \\" ++ arglist ++ " -> do"

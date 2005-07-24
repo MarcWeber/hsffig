@@ -7,7 +7,9 @@
 
 {-# OPTIONS -fglasgow-exts -ffi #-}
 
-module HSFFIG.FieldAccess where
+module HSFFIG.FieldAccess (
+  FieldAccess (..)
+) where
 
 import Foreign
 import Foreign.C.Types
