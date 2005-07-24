@@ -73,7 +73,7 @@ import Control.Monad(when)
 import Data.Maybe(fromMaybe)
 import Distribution.Compat.Directory(createDirectoryIfMissing,removeDirectoryRecursive)
 import Distribution.Compat.FilePath(joinFileName, dllExtension, exeExtension,
-				    splitFileExt, joinFileExt)
+				    splitFileExt, joinFileExt, joinPaths)
 import System.IO.Error(try)
 import System.Directory(Permissions(..), getPermissions, setPermissions)
 
@@ -109,7 +109,10 @@ installExeGhc verbose pref buildPref pkg_descr
     = do createDirectoryIfMissing True pref
          withExe pkg_descr $ \ (Executable e _ b) -> do
              let exeName = e `joinFileExt` exeExtension
-             copyFileVerbose verbose (buildPref `joinFileName` exeName) (pref `joinFileName` exeName)
+                 srcDir =  hsSourceDir b
+             copyFileVerbose verbose 
+                             (buildPref `joinPaths` srcDir `joinFileName` exeName) 
+                             (pref `joinFileName` exeName)
 
 -- |Install for ghc, .hi and .a
 installLibGHC :: Int      -- ^verbose
