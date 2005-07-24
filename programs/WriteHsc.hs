@@ -382,7 +382,6 @@ structinstance fn strname flddyn fldtype csyntax tymap ary field = do
       isbitfld = '|' `elem` fldtype
       truestr = if (isanon strname) then csyntax else (truename strname)
       arglist = intlv (take ary $ map (('_' :) . show) [1..]) " "
---  putStrLn $ "\ninstance " ++ (finalizeModuleName fn) ++ "_fieldaccess " ++
   putStrLn $ "\ninstance " ++ fldclass ++ " " ++
              (convname strname) ++ " (" ++ fldtype' ++ ") V_" ++ field ++ " where"
   case isbitfld of
@@ -422,7 +421,6 @@ structinstance fn strname flddyn fldtype csyntax tymap ary field = do
                     makedynfld fldtype fldtype' mkfld
                     makewrpfld fldtype fldtype' wrfld
                     when (ary > 0) $ do
---                      putStrLn $ "\ninstance " ++ (finalizeModuleName fn) ++ "_fieldaccess " ++
                       putStrLn $ "\ninstance " ++ fldclass ++ " " ++
                                  (convname strname) ++ " (" ++ fldtype' ++ ") X_" ++ 
                                  field ++ " where"
