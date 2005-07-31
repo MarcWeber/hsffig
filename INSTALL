@@ -1,0 +1,23 @@
+This file contains installation instructions for the source distribution
+of HSFFIG Version 1.0.
+
+This distribution comes with it own Cabal setup program, so it is not
+necessary to have Cabal installed to install HSFFIG. Even more, it is 
+preferred to use the `cabal-setup' program included with this distribution
+rather than the "standard" Cabal setup program.
+
+- After unpacking the tarball, go to the root directory of the distibution
+and run `make'. Among other things, this builds the Cabal setup executable
+furter referred to as `./cabal-setup'
+
+- Run ./cabal-setup configure. Alex is required to compile HSFFIG, so it 
+is necessary to provide path to Alex executable (the `--with-alex=' option
+of ./cabal-setup configure).
+
+- Run ./cabal-setup build. This builds the HSFFIG library, and all executables.
+
+- Run ./cabal-setup install. This install the library and the executables,
+and registers the package with GHC.
+
+At this point, HSFFIG is ready to use.
+

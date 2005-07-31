@@ -1,0 +1,30 @@
+This is a source distribution of HSFFIG: yet another FFI binding
+autogeneration utility, version 1.0
+
+The utility is built on the simple principle: given a C include
+file (.h) for a library, generate a Haskell module (or a collection 
+of modules) containing FFI bindings for the library. No configuration files,
+no manually written wrappers, nothing else. Maximum, a single include
+file needs to be written manually, containing only few #include directives.
+
+It is assumed that GNU C compiler is used. The utility has not been tested
+with compilers from other vendors. Also the utility is significantly
+biased towards GHC as the Haskell compiler to use, and although it may work
+with Hugs as well, this has not been tested yet.
+
+For installation instructions, please read the file INSTALL.
+
+For documentation, please refer to http://haskell.org/hawiki/HsffigTutorial.
+
+For possible directions of HSFFIG improvements, please read the file TODO.
+
+For any questions, concerns, and other related matters don't hesitate to contact
+the developer:
+
+Dimitry Golubovsky
+
+golubovsky@gmail.com
+
+dimitry@golubovsky.org
+
+

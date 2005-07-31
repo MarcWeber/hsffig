@@ -596,7 +596,7 @@ instance Show CPI where
   show (CPICon (Just c)) = "[" ++ (show c) ++ "]"
   show (CPIPar ps v) = "(" ++ (showcomma ps) ++ (dots v) ++ ")" where
     dots Fixed = ""
-    dots Variadic = "..."
+    dots Variadic = ", ..."
   show (CPIId ss) = "(" ++ (showcomma ss) ++ ")"
   show CPIEmpty = ""
 

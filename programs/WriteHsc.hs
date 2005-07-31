@@ -45,6 +45,7 @@ ghcopts = "{-# OPTIONS -fglasgow-exts -ffi #-}"
 
 writeModHdr mfn = do let fmfn = finalizeModuleName mfn
                      writeTemplate
+                     putStrLn $ "#def void _dummy_force_" ++ fmfn ++ "_hsc_c (void) { }"
                      putStrLn $ ghcopts
                      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfn ++ "\n"
                      putStrLn $ ghcopts
@@ -497,6 +498,7 @@ inclname Nothing = ""
 writeStandaloneFunctions tus tymap fn = 
   do let imps = map ((finalizeModuleName fn) ++) ["_S", "_C", "_E", "_S_cnt"]
          fmfnf = (finalizeModuleName fn) ++ "_F"
+     putStrLn $ "#include <stdlib.h>"
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfnf ++ "\n"
      writeSplitHeader imps fmfnf
      mapM (onefunc' tymap (inclname fn)) tus
@@ -872,9 +874,6 @@ onefunc tymap ifn dss ats id =
          arity (TApply ts) = (length ts) - 1
          arity (PtrF _ t) = arity t
          arity _ = 0
-     putStrLn ""
-     putStrLn "--"
-     putStrLn ""
      case (isv || drs,isf,dyn) of
        (False,True, False) -> do statimport ifn sym tsf
                                  cbckimport sym tsi
@@ -883,6 +882,9 @@ onefunc tymap ifn dss ats id =
                                  cbckimport sym tsi
        (False,False,False) -> varimport  ifn sym tsg True intern
        (True, _,    _)     -> excludeimport (sym ++ " :: " ++ tsg) isv drs
+     putStrLn ""
+     putStrLn "--"
+     putStrLn ""
      return ()
 
 -- Exclude an import and explain the reason.

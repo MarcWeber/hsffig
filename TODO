@@ -1,0 +1,17 @@
+At the moment, HSFFIG is just a tool to process C include files and
+produce Haskell FFI import statements.
+
+However, information that its parses outputs, may be interpreted as
+sort of a database where various queries may be run, such as:
+
+- what functions take double as second argument?
+- what constants have name matching a regexp?
+- which union contains a given entry?
+
+- You name it.
+
+With this implemented, developers will get a tool to create custom FFI
+wrapper modules, not just mechanically interpreting C declarations.
+
+This is what may be expected in the future versions of HSFFIG.
+
