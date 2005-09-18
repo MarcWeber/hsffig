@@ -603,8 +603,14 @@ simplifyid (InitDeclarator dd _) =
 
 -- apply connection with type aliases to every function parameter type
 
-ctad tymap (DeclaratorS ps mbds (DeclTypeFixed dds)) = 
-  DeclaratorS ps mbds (DeclTypeFixed (map (connectta tymap) dds))
+ctad tymap (DeclaratorS ps mbds dds) = 
+  DeclaratorS ps mbds' dds'
+    where mbds' = case mbds of
+            Just d -> Just $ ctad tymap d 
+            other -> mbds
+          dds' = case dds of
+            DeclTypeFixed dtds -> DeclTypeFixed $ map (connectta tymap) dtds
+            other -> dds
 
 ctad _ z = z
 
@@ -612,8 +618,13 @@ ctad _ z = z
 -- connect the target declarator (taken from the target declaration).
 
 cncd tymap (DeclarationS rts decl) dclc = DeclarationS rts (cncd' (ctad tymap decl) dclc) where
-  cncd' (DeclaratorS ps (Just d) dt) dclc = DeclaratorS ps (Just (cncd' d dclc)) dt
-  cncd' (DeclaratorS ps Nothing dt) dclc = DeclaratorS ps (Just dclc) dt
+  cncd' (DeclaratorS ps (Just d) dt) dclc = DeclaratorS ps (Just (cncd' d dclc)) (tpmap dt)
+  cncd' (DeclaratorS ps Nothing dt) dclc = DeclaratorS ps (Just dclc) (tpmap dt)
+  tpmap dtt = case dtt of
+    DeclTypeFixed dtds -> DeclTypeFixed $ map (connectta tymap) dtds
+    other -> dtt
+
+connectta :: (FiniteMap String DictElement) -> (DeclarationS) -> (DeclarationS)
 
 connectta tymap (DeclarationS rts decl) = 
   let decl' = ctad tymap decl in
