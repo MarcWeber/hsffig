@@ -6,6 +6,9 @@ import Char
 import C_BNF
 import SplitBounds
 import Template
+import Parsec
+import Text.ParserCombinators.Parsec.Expr
+import Text.ParserCombinators.Parsec.Token
 import System.Cmd
 import System.Exit
 import Data.FiniteMap
@@ -61,7 +64,9 @@ writeModHdr mfn = do let fmfn = finalizeModuleName mfn
                      putStrLn $ "  module " ++ fmfn ++ "_S,"
                      putStrLn $ "  module " ++ fmfn ++ "_F,"
                      putStrLn $ "  module " ++ fmfn ++ "_E,"
-                     putStrLn $ "  module " ++ fmfn ++ "_S_cnt,"
+                     putStrLn $ "  module " ++ fmfn ++ "_S_d,"
+                     putStrLn $ "  module " ++ fmfn ++ "_S_t,"
+                     putStrLn $ "  module " ++ fmfn ++ "_S_n,"
                      putStrLn $ splitClose
                      putStrLn $ "  module " ++ fldmodule ++ ","
                      putStrLn $ "  module Foreign,"
@@ -78,7 +83,9 @@ writeModHdr mfn = do let fmfn = finalizeModuleName mfn
                      putStrLn $ "import " ++ fmfn ++ "_S"
                      putStrLn $ "import " ++ fmfn ++ "_F"
                      putStrLn $ "import " ++ fmfn ++ "_E"
-                     putStrLn $ "import " ++ fmfn ++ "_S_cnt"
+                     putStrLn $ "import " ++ fmfn ++ "_S_d"
+                     putStrLn $ "import " ++ fmfn ++ "_S_t"
+                     putStrLn $ "import " ++ fmfn ++ "_S_n"
                      putStrLn $ "import " ++ fldmodule
                      putStrLn $ splitClose
                      putStrLn $ "\n" ++ splitEnd ++ "\n"
@@ -196,9 +203,11 @@ fillenum val (ed:eds) = fv : (fillenum (nxtval fv) eds) where
 -- and for each named field an algebraic data type whose name is derived from
 -- the field name:
 
---  data V_a = V_a deriving (Show)
---  data V_b = V_b deriving (Show)
---  data V_c = V_c deriving (Show)
+--  data V_a = V_a 
+--  data V_b = V_b
+--  data V_c = V_c
+
+-- also similar constructs with X_ and D_ prefixes.
 
 -- The combinator, (-->), is defined to access fields of structures by their
 -- derivative names. For example, given a struct STR {int blah;};, and
@@ -214,6 +223,27 @@ fillenum val (ed:eds) = fv : (fillenum (nxtval fv) eds) where
 -- Instance (minimal) of Storable is also provided for each structure
 -- to be able to use alloca/malloc when necessary.
 
+data StructInfo = StructInfo {
+  strName :: String,				-- structure type name as supplied
+  trueName :: String,				-- true name of the structure
+  convName :: String,				-- converted name of the structure
+  cSyntax :: String				-- C syntax layout of the structure
+} deriving (Show)
+
+data FieldInfo = FieldInfo {
+  fldName :: String,				-- field name
+  fldType :: String,				-- field type
+  instType :: String,				-- field type for instance FieldAccess
+  fldTypeString :: TypeString,			-- field type string after the TCM state machine
+  fldArity :: Int,				-- field arity (0 for non-functions)
+  fldDims :: String,				-- dimensions if an array ([] for scalars)
+  isDynamic :: Bool,				-- field represents a dynamic import (FunPtr)
+  isDirect :: Bool,				-- field represents a direct structure/union
+  isVariadic :: Bool,				-- field represents a variadic function
+  isBitField :: Bool,				-- bit field
+  internId :: String				-- field symbol internal ID
+} deriving (Show)
+
 sd2fld (StructDeclarator (Just d) _) = id2name (InitDeclarator d Nothing)
 sd2fld _ = ""
 
@@ -223,8 +253,9 @@ collectfields dss = concat $ map collectfields' dss where
 
 writefields flds fn =
   mapM fldata flds where
-    fldata fld = do putStrLn $ "data V_" ++ fld ++ " = V_" ++ fld ++ " deriving (Show)"
-                    putStrLn $ "data X_" ++ fld ++ " = X_" ++ fld ++ " deriving (Show)"
+    fldata fld = do putStrLn $ "data V_" ++ fld ++ " = V_" ++ fld
+                    putStrLn $ "data X_" ++ fld ++ " = X_" ++ fld
+                    putStrLn $ "data D_" ++ fld ++ " = D_" ++ fld
 
 writeStructures tus tymap fn = 
   do let structs = filterFM structonly tymap
@@ -240,17 +271,22 @@ writeStructures tus tymap fn =
          submods = map (((fmfns ++ "_") ++) . convname) strnames
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "\n"
      writeSplitHeaderX submods submods fmfns
-     putStrLn $ "\n" ++ splitEnd
-     putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "_cnt\n"
-     writeSplitHeader [] $ fmfns ++ "_cnt"
+     putStrLn $ "\n" ++ splitEnd ++ "\n"
+     putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "_d\n"
+     writeSplitHeader [] $ fmfns ++ "_d"
      writefields ("sizeof" : allfields) fn
+     putStrLn $ "\n" ++ splitEnd ++ "\n"
      putStrLn ""
+     putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "_t\n"
+     writeSplitHeader [fmfns ++ "_n"] $ fmfns ++ "_t"
      mapM (tdefalias tymap) typedefs
+     putStrLn $ "\n" ++ splitEnd ++ "\n"
      putStrLn ""
+     putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "_n\n"
+     writeSplitHeader [] $ fmfns ++ "_n"
      mapM structnewtype strnames
      putStrLn $ "\n" ++ splitEnd ++ "\n"
      mapM (onestruct tymap fn) strpairs
-     putStrLn $ "\n" ++ splitEnd ++ "\n"
      return ()
 
 -- Write complete definition for a single structure/union.
@@ -258,68 +294,99 @@ writeStructures tus tymap fn =
 onestruct tymap fn (strname,strdecl) = 
   do let csyntax = show strdecl
          xdecls = decls strdecl
-         fields = map (sd2fld . sdcl2sd) xdecls
-         sdcl2sd (StructDecl _ [s]) = s
          decls (DictStruct su s) = expdecls s
-         isvs = map isvariadic cmaps
-         drss = map isdirstruct cmaps
-         states = map (dcl2ts . (connectta tymap) . simplifystructdecl) xdecls
-         cmaps = map (mapc2hs . state2ts) states
-         stsps = map condmonadify cmaps
-         sdecls = map (ts2ts . condmonadify) cmaps
-         dyns = map (isdyn . state2ts) states
-         condmonadify t = if (isdyn t) then (monadify "IO" t) else t
-         isdyn (PtrF _ _) = True
-         isdyn _ = False
-         fldecls = zip6 isvs drss fields dyns sdecls stsps
-         sametype (_, _, _, _, s1, _) (_, _, _, _, s2, _) = (s1 == s2) 
-         cmptype (_, _, _, _, s1, _) (_, _, _, _, s2, _) = compare s1 s2
-         grpdecls = ((groupBy sametype) . (sortBy cmptype)) fldecls
-         fmfns = (finalizeModuleName fn) ++ "_S"
          strm = fmfns ++ "_" ++ (convname strname)
+         fmfns = (finalizeModuleName fn) ++ "_S"
+         isanon ('s':'t':'r':'u':'c':'t':'@':s:_) = isDigit s
+         isanon ('u':'n':'i':'o':'n':'@':s:_) = isDigit s
+         isanon _  = False
+         strinfo = StructInfo {
+           strName = strname,
+           trueName = if (isanon strname) then (show strdecl) else (truename strname),
+           convName = convname strname,
+           cSyntax = (show strdecl)
+         }
+         mkfldinfo xd = 
+           let state = (dcl2ts . (connectta tymap) . simplifystructdecl) xd
+               sdcl2sd (StructDecl _ s) = head s
+               fldn = (sd2fld . sdcl2sd) xd
+               stt = state2ts state
+               cmap = mapc2hs stt
+               stsp = condmonadify cmap
+               condmonadify t = if (dyn t) then (monadify "IO" t) else t
+               dyn t = case t of
+                 (PtrF _ _) -> True
+                 other -> False
+               dir = isdirstruct cmap
+               sdecl = ts2ts stsp
+               bit = '|' `elem` sdecl
+               instt = 
+                 (case isarray stt of
+                    True -> "Ptr ("
+                    False -> "(" )
+                   ++ (case dyn stt of
+                         True  -> unfptr sdecl
+                         False -> case dir of
+                           True  -> "Ptr " ++ (drop 1 sdecl)
+                           False -> case bit of
+                             True -> drop 1 $ dropWhile (/= '|') sdecl
+                             False -> sdecl) ++ ")"
+               dims = case isarray stt of
+                 True -> arrdims stt
+                 False -> []
+               arity tsp = case tsp of
+                 TApply ts -> (length ts) - 1
+                 PtrF _ t -> arity t
+                 other -> 0
+               intern = case (lookupFM tymap ("ID " ++ fldn)) of
+                 Just (DictId n) -> "___" ++ (show n) ++ "___"
+                 other -> ""
+               isarray tt = case tt of
+                 TString ts -> isarrt ts
+                 TString' ts -> isarrt ts
+                 PtrV _ t -> isarray t
+                 other -> False
+               arrdims tt = case tt of
+                 TString ts -> (fst . splitarrt) ts
+                 TString' ts -> (fst . splitarrt) ts
+                 PtrV _ t -> arrdims t
+                 other -> []
+           in
+           FieldInfo {
+             fldName = fldn,
+             fldType = sdecl,
+             instType = instt,
+             fldTypeString = stsp,
+             fldArity = arity stsp,
+             fldDims = dims,
+             isDynamic = dyn stt,
+             isDirect = dir,
+             isBitField = bit,
+             isVariadic = isvariadic cmap,
+             internId = intern
+           }
+         fldinfos = map mkfldinfo xdecls
 
      putStrLn ""
      putStrLn "--"
      putStrLn ""
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ strm ++ "\n"
-     writeSplitHeader [fmfns ++ "_cnt", fldmodule] strm
-     mapM (writegroupfld fn strname csyntax tymap) grpdecls
-     when ((length grpdecls) /= 0) $ structinstance fn strname False "CInt" csyntax tymap 0 "sizeof"
+     writeSplitHeader (fldmodule : (map (fmfns ++) ["_t", "_n", "_d"])) strm
+     mapM (structinstance fn strinfo) fldinfos
+     when ((length fldinfos) /= 0) $ structinstance fn strinfo FieldInfo {
+       fldName = "sizeof",
+       fldType = "CInt",
+       instType = "CInt",
+       fldArity = 0,
+       fldTypeString = TString' "CInt",
+       fldDims = [],
+       isDynamic = False,
+       isDirect = False,
+       isBitField = False,
+       isVariadic = False,
+       internId = ""
+     }
      putStrLn $ splitEnd
-
--- Write declarations for a group of fields of the same type.
--- Import will be excluded if a member is pointer to a variadic
--- function, or if a pointer to a function taking/returning
--- direct structures.
-
-writegroupfld fn strname csyntax tymap grp = 
-  do let fields = map fldname grp
-         grptype = fldtype $ head grp
-         grptsp = fldtsp $ head grp
-         grpdyn = flddyn $ head grp
-         grpisv = fldisv $ head grp
-         grpdrs = flddrs $ head grp
-         fldname (_, _, s, _, _, _) = s
-         fldtype (_, _, _, _, t, _) = t
-         flddyn  (_, _, _, d, _, _) = d
-         fldisv  (i, _, _, _, _, _) = i
-         flddrs  (_, d, _, _, _, _) = d
-         fldtsp  (_, _, _, _, _, p) = p
-         arity (TApply ts) = (length ts) - 1
-         arity (PtrF _ t) = arity t
-         arity _ = 0
-         grpary = arity grptsp
-         exclimp = case (grpdyn,grpisv||grpdrs) of
-                     (False, _)    -> False
-                     (True, False) -> False
-                     (True, True)  -> True
-         qual f = (convname strname) ++ "_" ++ f
-     case exclimp of
-       True -> do excludeimport (show fields) grpisv grpdrs
-                  return ()
-       False -> do mapM (\f -> do structinstance fn strname grpdyn grptype csyntax tymap grpary f
-                                  when grpdyn $ cbckimport (qual f) grptsp) fields
-                   return ()
 
 -- Expand declarations so that if there are multiple member declarations
 -- of the same type, the same number of one-member declarations will be created.
@@ -352,110 +419,131 @@ truename strname
 -- For anonymous structures, their C syntax (deparsed) will be used
 -- to form the #peek construction.
 
-structinstance fn strname flddyn fldtype csyntax tymap ary field = do
-  let fldtype' = case flddyn of
-        True  -> unfptr fldtype
-        False -> case isdirstruct of
-          True  -> "Ptr " ++ (drop 1 fldtype)
-          False -> case isbitfld of
-            True -> drop 1 $ dropWhile (/= '|') fldtype
-            False -> fldtype
-      intern = case (lookupFM tymap ("ID " ++ field)) of
-               Just (DictId n) -> "___" ++ (show n) ++ "___"
-               other -> ""
-      mkfld = intern ++ (convname strname) ++ "___mk"
-      wrfld = intern ++ (convname strname) ++ "___wr"
-      isdirstruct = ((head fldtype) == '@')
-      isanon ('s':'t':'r':'u':'c':'t':'@':s:_) = isDigit s
-      isanon ('u':'n':'i':'o':'n':'@':s:_) = isDigit s
-      isanon _ = False
-      isbitfld = '|' `elem` fldtype
-      truestr = if (isanon strname) then csyntax else (truename strname)
-      arglist = intlv (take ary $ map (('_' :) . show) [1..]) " "
-  putStrLn $ "\ninstance " ++ fldclass ++ " " ++
-             (convname strname) ++ " (" ++ fldtype' ++ ") V_" ++ field ++ " where"
-  case isbitfld of
-    True -> do let getbf = intern ++ (convname strname) ++ "___get___" ++ field ++ "___"
-                   setbf = intern ++ (convname strname) ++ "___set___" ++ field ++ "___"
-                   getbfhs = getbf ++ "___hs___"
-                   setbfhs = setbf ++ "___hs___"
-                   ctype = map u2sp $ takeWhile (/= '|') fldtype
-                   u2sp '_' = ' '
-                   u2sp z = z
-               putStrLn $ "  z --> V_" ++ field ++ " = " ++ getbfhs ++ " z"
-               putStrLn $ "  (z, V_" ++ field ++ ") <-- v = " ++ setbfhs ++ " z v"
-               putStrLn $ ""
-               putStrLn $ "foreign import ccall unsafe \"static " ++ getbf ++ "\""
-               putStrLn $ "  " ++ getbfhs ++ " :: Ptr " ++ (convname strname) ++ 
-                          " -> IO " ++ fldtype'
-               putStrLn $ "foreign import ccall unsafe \"static " ++ setbf ++ "\""
-               putStrLn $ "  " ++ setbfhs ++ " :: Ptr " ++ (convname strname) ++ 
-                          " -> " ++ fldtype' ++ " -> IO ()"
-               putStrLn $ ""
-               putStrLn $ "#def inline " ++ ctype ++ " " ++ getbf ++ "(void *s) {"
-               putStrLn $ "  return ((" ++ truestr ++ " *)s) -> " ++ field ++ ";"
-               putStrLn $ "}"
-               putStrLn $ ""
-               putStrLn $ "#def inline void " ++ setbf ++ 
-                          "(void *s, " ++ ctype ++ " v) {"
-               putStrLn $ "  ((" ++ truestr ++ " *)s) -> " ++ field ++ " = v;"
-               putStrLn $ "}"
-    False ->
-      case flddyn of
-        False -> case isdirstruct of
-          True  -> ptrfield truestr (convname strname) field
-          False -> case (field == "sizeof") of
-            True  -> sizefield truestr (convname strname)
-            False -> peekfield truestr (convname strname) field
-        True  -> do peekdynfld truestr (convname strname) field mkfld wrfld
-                    makedynfld fldtype fldtype' mkfld
-                    makewrpfld fldtype fldtype' wrfld
-                    when (ary > 0) $ do
-                      putStrLn $ "\ninstance " ++ fldclass ++ " " ++
-                                 (convname strname) ++ " (" ++ fldtype' ++ ") X_" ++ 
-                                 field ++ " where"
-                      putStrLn $ "  z ==> X_" ++ field ++ " = \\" ++ arglist ++ " -> do"
-                      putStrLn $ "    x <- z --> V_" ++ field 
-                      putStrLn $ "    r <- x " ++ arglist
-                      putStrLn $ "    return r"
+structinstance fn strinfo fldinfo = do
+  let icid = (internId fldinfo) ++ (convName strinfo)
+      mkfld = icid ++ "___mk"
+      wrfld = icid ++ "___wr"
+      arglist = intlv (take (fldArity fldinfo) $ map (('_' :) . show) [1..]) " "
+      exclimp = case (isDynamic fldinfo, isVariadic fldinfo||isDirect fldinfo) of
+                  (False, _)    -> False
+                  (True, False) -> False
+                  (True, True)  -> True
+  instheader fldclass strinfo fldinfo instType "V_"
+  case exclimp of
+    True -> excludeimport (fldName fldinfo) (isVariadic fldinfo) (isDirect fldinfo)
+    False -> case (isBitField fldinfo) of
+      True -> bitfield strinfo fldinfo
+      False -> do 
+        case (isDynamic fldinfo) of
+          False -> case (isDirect fldinfo) of
+            True  -> ptrfield strinfo (fldName fldinfo)
+            False -> case (fldName fldinfo == "sizeof") of
+              True  -> sizefield strinfo
+              False -> peekfield strinfo (fldName fldinfo)
+          True  -> do peekdynfld strinfo (fldName fldinfo) mkfld wrfld
+                      makedynfld fldinfo mkfld
+                      makewrpfld fldinfo wrfld
+                      cbckimport ((convName strinfo) ++ "_" ++ (fldName fldinfo)) 
+                                 (fldTypeString fldinfo)
+                      when (fldArity fldinfo > 0) $ do
+                        instheader fldclass strinfo fldinfo instType "X_"
+                        putStrLn $ "  z ==> X_" ++ (fldName fldinfo) ++ " = \\" ++ 
+                                   arglist ++ " -> do"
+                        putStrLn $ "    x <- z --> V_" ++ (fldName fldinfo) 
+                        putStrLn $ "    r <- x " ++ arglist
+                        putStrLn $ "    return r"
+        when ((length $ fldDims fldinfo) > 0) $ dimfield strinfo fldinfo
 
-ptrfield truestr str fld = do
-  putStrLn $ 
-    "  z --> V_" ++ fld ++ " = return $ (#ptr __quote__(" ++ truestr ++ "), " ++ fld ++ ") z"
+-- Output an instance header for the given structure, field, type.
+
+instheader fc si fi ft pfx = 
+  putStrLn $ "\ninstance " ++ fc ++ " " ++ (convName si) ++ " (" ++
+             (ft fi) ++ ") " ++ pfx ++ (fldName fi) ++ " where"
+
+-- For structures members which are arrays, output 
+-- a pseudo-member to access the dimensions
+
+dimfield si fi = do
+  instheader fldclass si fi (\_ -> "[Int]") "D_"
+  putStrLn $ "  z --> D_" ++ (fldName fi) ++ " = return " ++ (fldDims fi)
   putStrLn $
-    "  (z, V_" ++ fld ++ ") <-- v = error $ \"field " ++ fld ++ " is a structure: cannot be set\""
+    "  (z, D_" ++ (fldName fi) ++ ") <-- v = error $ \"dimensions of a field  cannot be set\""
+
+-- Output code to access a bit field.
+
+bitfield si fi = do
+  let icid = (internId fi) ++ (convName si)
+      getbf = icid ++ "___get___" ++ (fldName fi) ++ "___"
+      setbf = icid ++ "___set___" ++ (fldName fi) ++ "___"
+      getbfhs = getbf ++ "___hs___"
+      setbfhs = setbf ++ "___hs___"
+      ctype = map u2sp $ takeWhile (/= '|') (fldType fi)
+      u2sp '_' = ' '
+      u2sp z = z
+  putStrLn $ "  z --> V_" ++ (fldName fi) ++ " = " ++ getbfhs ++ " z"
+  putStrLn $ "  (z, V_" ++ (fldName fi) ++ ") <-- v = " ++ setbfhs ++ " z v"
+  putStrLn $ ""
+  putStrLn $ "foreign import ccall unsafe \"static " ++ getbf ++ "\""
+  putStrLn $ "  " ++ getbfhs ++ " :: Ptr " ++ (convName si) ++
+             " -> IO " ++ (instType fi)
+  putStrLn $ "foreign import ccall unsafe \"static " ++ setbf ++ "\""
+  putStrLn $ "  " ++ setbfhs ++ " :: Ptr " ++ (convName si) ++
+             " -> " ++ (instType fi) ++ " -> IO ()"
+  putStrLn $ ""
+  putStrLn $ "#def inline " ++ ctype ++ " " ++ getbf ++ "(void *s) {"
+  putStrLn $ "  return ((" ++ (trueName si) ++ " *)s) -> " ++ (fldName fi) ++ ";"
+  putStrLn $ "}"
+  putStrLn $ ""
+  putStrLn $ "#def inline void " ++ setbf ++
+             "(void *s, " ++ ctype ++ " v) {"
+  putStrLn $ "  ((" ++ (trueName si) ++ " *)s) -> " ++ (fldName fi) ++ " = v;"
+  putStrLn $ "}"
+
+ptrfield si fld = do
+  putStrLn $ 
+    "  z --> V_" ++ fld ++ " = return $ (#ptr __quote__(" ++ (trueName si) ++ "), " ++ fld ++ ") z"
+  putStrLn $
+    "  (z, V_" ++ fld ++ ") <-- v = error $ \"field " ++ fld ++ " is a structure or an array:" 
+                                                      ++ " cannot be set\""
 
 -- Write the V_sizeof field.
 -- Also write a instance Storable for the structure. Only sizeOf and alignment
 -- are effective. Peek and poke will cause error if used. 
 
-sizefield truestr str = do
-  putStrLn $ "  z --> V_sizeof = return $ (#size __quote__(" ++ truestr ++ "))"
+sizefield si = do
+  putStrLn $ "  z --> V_sizeof = return $ (#size __quote__(" ++ (trueName si) ++ "))"
   putStrLn $ ""
-  putStrLn $ "instance Storable " ++ str ++ " where"
-  putStrLn $ "  sizeOf _ = (#size __quote__(" ++ truestr ++ "))"
+  putStrLn $ "instance Storable " ++ (convName si) ++ " where"
+  putStrLn $ "  sizeOf _ = (#size __quote__(" ++ (trueName si) ++ "))"
   putStrLn $ "  alignment _ = 1"
-  putStrLn $ "  peek _ = error $ \"peek and poke cannot be used with " ++ truestr ++ "\""
-  putStrLn $ "  poke _ = error $ \"peek and poke cannot be used with " ++ truestr ++ "\""
+  putStrLn $ "  peek _ = error $ \"peek and poke cannot be used with " ++ (trueName si) ++ "\""
+  putStrLn $ "  poke _ = error $ \"peek and poke cannot be used with " ++ (trueName si) ++ "\""
 
-peekfield truestr str fld = do
-  putStrLn $ "  z --> V_" ++ fld ++ " = (#peek __quote__(" ++ truestr ++ "), " ++ fld ++ ") z"
-  putStrLn $ "  (z, V_" ++ fld ++ ") <-- v = (#poke __quote__(" ++ truestr ++ "), " ++ fld ++ ") z v"
+-- A regular structure member which can be read and set.
 
-makedynfld fromtype totype mkf = do
+peekfield si fld = do
+  putStrLn $ "  z --> V_" ++ fld ++ " = (#peek __quote__(" ++ (trueName si) ++ "), " ++ fld ++ ") z"
+  putStrLn $ "  (z, V_" ++ fld ++ ") <-- v = (#poke __quote__(" ++ (trueName si) ++ "), " ++ 
+             fld ++ ") z v"
+
+-- Output dynamic wrappers for a structure member holding function pointer.
+
+makedynfld fldinfo mkf = do
   putStrLn $ "foreign import ccall \"dynamic\"\n" ++
-             "  " ++ mkf ++ " :: (" ++ fromtype ++ ") -> (" ++ totype ++ ")"
+             "  " ++ mkf ++ " :: (" ++ (fldType fldinfo) ++ ") -> (" ++ (instType fldinfo) ++ ")"
 
-
-makewrpfld totype fromtype wrp = do
+makewrpfld fldinfo wrp  = do
   putStrLn $ "foreign import ccall \"wrapper\"\n" ++
-             "  " ++ wrp ++ " :: (" ++ fromtype ++ ") -> IO (" ++ totype ++ ")"
+             "  " ++ wrp ++ " :: (" ++ (instType fldinfo) ++ ") -> IO (" ++ (fldType fldinfo) ++ ")"
 
-peekdynfld truestr str fld mkf wrp = do
-  putStrLn $ "  z --> V_" ++ fld ++ " = (#peek __quote__(" ++ truestr ++ "), " ++ fld ++ ") z" ++
+-- Output code to access a structure member containing a function pointer.
+
+peekdynfld si fld mkf wrp = do
+  putStrLn $ "  z --> V_" ++ fld ++ " = (#peek __quote__(" ++ (trueName si) ++ "), " ++ 
+             fld ++ ") z" ++
              " >>= (return . " ++ mkf ++ ")"
   putStrLn $ "  (z, V_" ++ fld ++ ") <-- v = (" ++ wrp ++ " v) >>= " ++
-             "(#poke __quote__(" ++ truestr ++ "), " ++ fld ++ ") z"
+             "(#poke __quote__(" ++ (trueName si) ++ "), " ++ fld ++ ") z"
 
 
 -- Write newtype statements for every structure.
@@ -496,7 +584,7 @@ inclname (Just fn) = fn
 inclname Nothing = ""
 
 writeStandaloneFunctions tus tymap fn = 
-  do let imps = map ((finalizeModuleName fn) ++) ["_S", "_C", "_E", "_S_cnt"]
+  do let imps = map ((finalizeModuleName fn) ++) ["_S", "_C", "_E", "_S_d","_S_t","_S_n"]
          fmfnf = (finalizeModuleName fn) ++ "_F"
      putStrLn $ "#include <stdlib.h>"
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfnf ++ "\n"
@@ -569,15 +657,38 @@ data DeclType = DeclTypeVar                          -- for variables
               | DeclTypeUnknown String               -- not implemented yet
               deriving (Show)
 
-simplifydecl dss id = DeclarationS (ds2rtn $ typeonly dss) (simplifyid id)
+simplifydecl dss id@(InitDeclarator decl mbi) = 
+  DeclarationS dsn' (simplifyid $ InitDeclarator decl' mbi) where
+    dsn = ds2rtn $ typeonly dss
+    (dsn', decl') = convarray (dsn, decl)
 
--- Convert array types to pointers, i. e. a[][] into int **a.
+-- Convert array types with empty brackets to pointers, i. e. a[][] into int **a.
+-- Arrays with nonempty dimension information keep that information in their
+-- typestrings.
+
+convarray (tss, d@(Declarator ps esd [])) = (tss, d)
+
+convarray (tss, d@(Declarator ps esd (cpi:cpis))) = 
+  case cpi of
+    CPICon Nothing -> convarray (tss, Declarator (ps ++ [Pointer []]) esd cpis)
+    CPICon (Just con) -> convarray (con2num con : tss, Declarator ps esd cpis)
+    other -> (tss, d)
+
+-- When dealing with array dimensions (which may be C constant expressions),
+-- wrap them in the #const macro for hsc2hs to process. Replace underscores
+-- (_) with backquotes (`) temporarily not to confuse the further processing
+-- of the type because underscores serve as separators between parts of the type
+-- definition.
+
+con2num con = "#const(" ++ map un2bq (show con) ++ ")@" where
+  un2bq '_' = '`'
+  un2bq z = z
 
 convdims d@(Declarator ps esd []) = d
 
 convdims d@(Declarator ps esd (cpi:cpis)) = 
   case cpi of
-    (CPICon _) -> convdims (Declarator (ps ++ [Pointer []]) esd cpis)
+    (CPICon Nothing) -> convdims (Declarator (ps ++ [Pointer []]) esd cpis)
     other      -> d
 
 -- simplify InitDeclarator (convert to DeclaratorS).
@@ -594,14 +705,13 @@ simplifyid (InitDeclarator dd _) =
     convcpis [CPIPar _ Variadic] = DeclTypeVariadic
     convcpis [CPIPar pds Fixed] = DeclTypeFixed (map convpdecl pds)
     convcpis z = DeclTypeUnknown (show z)
-    convpdecl (ParamDecl pdds mbd) = DeclarationS (ds2rtn $ typeonly pdds) (convmbd mbd)
-    convmbd Nothing = DeclaratorS 0 Nothing DeclTypeVar
-    convmbd (Just dd'') = 
-      mkdecls (convdims dd'')
+    convpdecl (ParamDecl pdds mbd) = simplifydecl pdds (mbd2id mbd)
+    mbd2id (Just d) = InitDeclarator d Nothing
+    mbd2id Nothing = InitDeclarator (Declarator [] (Left "") []) Nothing
 
 -- Connect type aliases to the declarations that use them.
 
--- apply connection with type aliases to every function parameter type
+-- Apply connection with type aliases to every function parameter type
 
 ctad tymap (DeclaratorS ps mbds dds) = 
   DeclaratorS ps mbds' dds'
@@ -611,8 +721,6 @@ ctad tymap (DeclaratorS ps mbds dds) =
           dds' = case dds of
             DeclTypeFixed dtds -> DeclTypeFixed $ map (connectta tymap) dtds
             other -> dds
-
-ctad _ z = z
 
 -- Follow the type alias' chain of declarators, and when Nothing is found,
 -- connect the target declarator (taken from the target declaration).
@@ -624,23 +732,31 @@ cncd tymap (DeclarationS rts decl) dclc = DeclarationS rts (cncd' (ctad tymap de
     DeclTypeFixed dtds -> DeclTypeFixed $ map (connectta tymap) dtds
     other -> dtt
 
-connectta :: (FiniteMap String DictElement) -> (DeclarationS) -> (DeclarationS)
+-- When mapping type aliases, take care on possible array dimensions:
+-- strip them before mapping (they look like n@ where n is a natural number),
+-- and prepend them back after the mapping is done.
 
 connectta tymap (DeclarationS rts decl) = 
-  let decl' = ctad tymap decl in
-    case (length rts) of
-      1 -> case (lookupFM tymap (head rts)) of
-             Nothing -> DeclarationS rts decl'
-             Just (DictDecl (Declaration adss [aid] at)) -> 
-               cncd tymap (connectta tymap $ simplifydecl adss aid) decl'
-             other -> error $ (head rts) ++ " is not a type alias"
-      other -> DeclarationS rts decl'
+  restoredims rtsdims $ connectta' tymap (DeclarationS rts' decl) where
+    rtsdims = takeWhile ("@" `isSuffixOf`) rts
+    rts' = dropWhile ("@" `isSuffixOf`) rts
+    restoredims dms (DeclarationS r d) = DeclarationS (dms ++ r) d
+    connectta' tymap (DeclarationS rts decl) = 
+      let decl' = ctad tymap decl in
+        case (length rts) of
+          1 -> case (lookupFM tymap (head rts)) of
+                 Nothing -> DeclarationS rts decl'
+                 Just (DictDecl (Declaration adss [aid] at)) -> 
+                   cncd tymap (connectta tymap $ simplifydecl adss aid) decl'
+                 other -> error $ (head rts) ++ " is not a type alias"
+          other -> DeclarationS rts decl'
 
 -- Type conversion state machine. The chain of DeclaratorS's starting at the first
 -- DeclarationS is followed. Each DeclaratorS acts as an instruction modifying
 -- the state.
 
 data TypeString = TString String
+                | TString' String	  -- same as TString but no more type mappings
                 | TApply  [TypeString]
                 | PtrF    Int TypeString
                 | PtrV    Int TypeString
@@ -654,6 +770,7 @@ data TCMState = TCMState TypeString        -- current type string
 -- String representation of a TypeString
 
 ts2ts (TString s) = s
+ts2ts (TString' s) = s
 ts2ts (TApply tss) = intlv (map ts2ts tss) " -> "
 ts2ts (PtrV ps ts) = nptrs ps (ts2ts ts) "Ptr"
 ts2ts (PtrF ps ts) = nptrs ps (ts2ts ts) "FunPtr"
@@ -665,92 +782,128 @@ nptrs n s p = p ++ " (" ++ (nptrs (n - 1) s p) ++ ")"
 
 -- Map C types in the type string to Haskell types (if available).
 
--- Function application: map type of each parameter and return type.
+mapc2hs (TString' z) = TString' z
 
-mapc2hs (TApply tss) = TApply $ map mapc2hs tss
+-- Function application: map type of each parameter and return type.
+-- Take arguments-arrays into consideration.
+
+mapc2hs (TApply tss) = TApply $ map mapc2hs_arr tss
 
 -- Special cases.
 
+-- Pointer types: map the target type.
+-- Nested pointers: increase pointer depth. 
 -- Pointers to void are represented as Ptr CChar.
-
-mapc2hs (PtrV ps (TString "void")) = mapc2hs (PtrV ps (TString "char"))
-
--- Pointers to variadic functions are represented as pointers to unary
+-- Pointers to variadic functions are represented as pointers to nullary
 -- functions.
+-- Structures, unions: only pointers are valid.
 
-mapc2hs (PtrF ps (TApply [TString "@@variadic@@"])) = 
-  PtrF ps (TApply [TString "()"])
+mapc2hs (PtrF ps ts) = case ts of 
+  PtrF ps' ts' -> mapc2hs (PtrF (ps + ps') ts')
+  (TApply [TString "@@variadic@@"]) -> PtrF ps (TApply [TString "()"])
+  other -> PtrF ps (mapc2hs ts) 
+
+mapc2hs (PtrV ps ts) = case ts of
+  PtrV ps' ts' -> mapc2hs (PtrV (ps + ps') ts')
+  TString "void" -> mapc2hs (PtrV ps (TString "char"))
+  TString ('s':'t':'r':'u':'c':'t':'_':strname) -> PtrV ps (TString ("S_" ++ strname))
+  TString ('u':'n':'i':'o':'n':'_':strname) -> PtrV ps (TString ("U_" ++ strname))
+  other -> PtrV ps (mapc2hs ts) 
 
 -- Manually hardcoded type mapping, based on Page 32 of the FFI Addendum.
 
-mapc2hs (TString "int") = TString "CInt"
-mapc2hs (TString "signed_int") = TString "CInt"
-mapc2hs (TString "unsigned_int") = TString "CUInt"
-mapc2hs (TString "signed") = TString "CInt"
-mapc2hs (TString "unsigned") = TString "CUInt"
-mapc2hs (TString "short") = TString "CShort"
-mapc2hs (TString "unsigned_short") = TString "CUShort"
-mapc2hs (TString "short_int") = TString "CShort"
-mapc2hs (TString "signed_short_int") = TString "CShort"
-mapc2hs (TString "unsigned_short_int") = TString "CUShort"
-mapc2hs (TString "char") = TString "CChar"
-mapc2hs (TString "signed_char") = TString "CSChar"
-mapc2hs (TString "unsigned_char") = TString "CUChar"
-mapc2hs (TString "long") = TString "CLong"
-mapc2hs (TString "unsigned_long") = TString "CULong"
-mapc2hs (TString "long_int") = TString "CLong"
-mapc2hs (TString "unsigned_long_int") = TString "CULong"
-mapc2hs (TString "long_long") = TString "CLLong"
-mapc2hs (TString "unsigned_long_long") = TString "CULLong"
-mapc2hs (TString "long_long_int") = TString "CLLong" 
-mapc2hs (TString "signed_long_long_int") = TString "CLLong"
-mapc2hs (TString "unsigned_long_long_int") = TString "CULLong"
-mapc2hs (TString "float") = TString "CFloat"
-mapc2hs (TString "double") = TString "CDouble"
-mapc2hs (TString "long_double") = TString "CLDouble"
-mapc2hs (TString "@@ptrdiff_t@@") = TString "CPtrdiff"
-mapc2hs (TString "@@size_t@@") = TString "CSize"
-mapc2hs (TString "@@wchar_t@@") = TString "CWchar"
-mapc2hs (TString "@@sig_atomic_t@@") = TString "CSigAtomic"
-mapc2hs (TString "@@clock_t@@") = TString "CClock"
-mapc2hs (TString "@@time_t@@") = TString "CTime"
-mapc2hs (TString "@@FILE@@") = TString "CFile"
-mapc2hs (TString "@@fpos_t@@") = TString "CFpos"
-mapc2hs (TString "@@jmp_buf@@") = TString "CJmpBuf"
-mapc2hs (TString "@@void@@") = TString "()"
-mapc2hs (TString "void") = TString "()"
-mapc2hs (TString "@@variadic@@") = TString "WrongVariadicFunction"
-
--- Structures, unions (only pointers are valid).
-
-mapc2hs (PtrV n (TString ('s':'t':'r':'u':'c':'t':'_':strname))) = 
-  PtrV n (TString ("S_" ++ strname))
-
-mapc2hs (PtrV n (TString ('u':'n':'i':'o':'n':'_':strname))) = 
-  PtrV n (TString ("U_" ++ strname))
+mapc2hs (TString "int") = TString' "CInt"
+mapc2hs (TString "signed_int") = TString' "CInt"
+mapc2hs (TString "unsigned_int") = TString' "CUInt"
+mapc2hs (TString "signed") = TString' "CInt"
+mapc2hs (TString "unsigned") = TString' "CUInt"
+mapc2hs (TString "short") = TString' "CShort"
+mapc2hs (TString "unsigned_short") = TString' "CUShort"
+mapc2hs (TString "short_int") = TString' "CShort"
+mapc2hs (TString "signed_short_int") = TString' "CShort"
+mapc2hs (TString "unsigned_short_int") = TString' "CUShort"
+mapc2hs (TString "char") = TString' "CChar"
+mapc2hs (TString "signed_char") = TString' "CSChar"
+mapc2hs (TString "unsigned_char") = TString' "CUChar"
+mapc2hs (TString "long") = TString' "CLong"
+mapc2hs (TString "unsigned_long") = TString' "CULong"
+mapc2hs (TString "long_int") = TString' "CLong"
+mapc2hs (TString "unsigned_long_int") = TString' "CULong"
+mapc2hs (TString "long_long") = TString' "CLLong"
+mapc2hs (TString "unsigned_long_long") = TString' "CULLong"
+mapc2hs (TString "long_long_int") = TString' "CLLong" 
+mapc2hs (TString "signed_long_long_int") = TString' "CLLong"
+mapc2hs (TString "unsigned_long_long_int") = TString' "CULLong"
+mapc2hs (TString "float") = TString' "CFloat"
+mapc2hs (TString "double") = TString' "CDouble"
+mapc2hs (TString "long_double") = TString' "CLDouble"
+mapc2hs (TString "@@ptrdiff_t@@") = TString' "CPtrdiff"
+mapc2hs (TString "@@size_t@@") = TString' "CSize"
+mapc2hs (TString "@@wchar_t@@") = TString' "CWchar"
+mapc2hs (TString "@@sig_atomic_t@@") = TString' "CSigAtomic"
+mapc2hs (TString "@@clock_t@@") = TString' "CClock"
+mapc2hs (TString "@@time_t@@") = TString' "CTime"
+mapc2hs (TString "@@FILE@@") = TString' "CFile"
+mapc2hs (TString "@@fpos_t@@") = TString' "CFpos"
+mapc2hs (TString "@@jmp_buf@@") = TString' "CJmpBuf"
+mapc2hs (TString "@@void@@") = TString' "()"
+mapc2hs (TString "void") = TString' "()"
+mapc2hs (TString "@@variadic@@") = TString' "WrongVariadicFunction"
 
 -- Direct structures/unions: valid in some circumstances, but
 -- require special treatment.
 
 mapc2hs (TString ('s':'t':'r':'u':'c':'t':'_':strname)) =
-  TString ("@S_" ++ strname)
+  TString' ("@S_" ++ strname)
 
 mapc2hs (TString ('u':'n':'i':'o':'n':'_':strname)) =
-  TString ("@U_" ++ strname)
+  TString' ("@U_" ++ strname)
 
 -- Special pseudo-type for bit fields.
 
-mapc2hs (TString ('$':'B':'F':'$':'_':s)) = TString (s ++ "|" ++ ts2ts (mapc2hs (TString s)))
+mapc2hs (TString ('$':'B':'F':'$':'_':s)) = TString' (s ++ "|" ++ ts2ts (mapc2hs (TString s)))
 
--- Pointer types: map the target type.
-
-mapc2hs (PtrF ps ts) = PtrF ps (mapc2hs ts)
-mapc2hs (PtrV ps ts) = PtrV ps (mapc2hs ts)
-
+-- Array types: represented as pointers to the type of array element.
+-- Array type string starts with a digit and contains @-sign at non-head
+-- position.
 -- The rest, will be converted into unknown types, and will cause
 -- compilation error.
 
-mapc2hs (TString z)  = TString ("Unmapped_C_Type_" ++ z)
+mapc2hs (TString at)
+  | isarrt at = mapc2hs (TString $ snd (splitarrt at))
+  | otherwise = unmapped at
+
+-- Check whether the typestring represents an array type.
+
+isarrt at = let firstdim = takeWhile (/= '@') at in
+            (length firstdim > 0) && ("#const" `isPrefixOf` firstdim)
+
+-- Special version of the type map function considering conversion of arrays
+-- into pointers.
+
+mapc2hs_arr t@(TString at)
+  | isarrt at = PtrV 1 (mapc2hs (TString $ snd (splitarrt at)))
+  | otherwise = mapc2hs t
+
+mapc2hs_arr z = mapc2hs z
+
+unmapped z = TString' ("Unmapped_C_Type_" ++ z)
+
+-- Split array type string into dimensions ([Int]) and the base type string
+-- (String).
+
+splitarrt arts = (dims,basetype)
+  where notat = (/= '@')
+        basetype = (drop 1 . reverse . takeWhile notat . reverse) arts
+        dimtxt = (reverse . dropWhile notat . reverse) arts
+        dimpts = parts (== '_') dimtxt
+        dims = map bq2un dims'
+        bq2un '`' = '_'
+        bq2un z = z
+        dims' = "[" ++ intlv (reverse $ map (readdim . filter notat) dimpts) ", " ++ "]"
+        readdim "*" = "-1"
+        readdim s = s
+        
 
 -- Monadify the type string. All functions must return
 -- monadic (usually IO) types.
@@ -805,7 +958,10 @@ tcmtrans st (DeclaratorS ps _ (DeclTypeFixed dcls)) = parmsapply dcls $ ptrapply
 
 tcmtrans st (DeclaratorS _ _ DeclTypeVariadic) = 
   TCMState (TApply [TString "@@variadic@@"]) True
-  
+
+tcmtrans st (DeclaratorS _ _ (DeclTypeUnknown t)) = 
+  TCMState (TApply [TString $ "@@unknown" ++ t ++ "@@"]) True
+
 -- Initializes a type string from a DeclarationS
 
 dcl2state (DeclarationS ds _) = TCMState (TString (intlv ds "_")) False
@@ -842,13 +998,15 @@ checktsrec pred z = pred z
 -- True if a type is of a variadic function.
 
 isvariadic ts = checktsrec isvr ts where
-  isvr (TString "WrongVariadicFunction") = True
+  isvr (TString  "WrongVariadicFunction") = True
+  isvr (TString' "WrongVariadicFunction") = True
   isvr _ = False
 
 -- True if a type is of a function taking/returning direct structures
 
 isdirstruct ts = checktsrec isd ts where
-  isd (TString ('@':_)) = True
+  isd (TString  ('@':_)) = True
+  isd (TString' ('@':_)) = True
   isd _ = False
 
 -- Output a FFI declaration of a function or a variable.
@@ -893,6 +1051,7 @@ onefunc tymap ifn dss ats id =
                                  cbckimport sym tsi
        (False,False,False) -> varimport  ifn sym tsg True intern
        (True, _,    _)     -> excludeimport (sym ++ " :: " ++ tsg) isv drs
+
      putStrLn ""
      putStrLn "--"
      putStrLn ""
