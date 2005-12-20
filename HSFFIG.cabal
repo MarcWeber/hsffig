@@ -1,5 +1,5 @@
 Name:		HSFFIG
-Version:	1.0
+Version:	1.1
 License:	BSD3
 License-file:	License.txt
 Copyright:	2005, Dimitry Golubovsky
@@ -16,7 +16,7 @@ Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes
 		imported into an application to get access to the foreign library's 
 		functions and variables.
 Tested-with:	GHC==6.2.2
-Build-depends:	base, text
+Build-depends:	base, text, hxt
 Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses
 
