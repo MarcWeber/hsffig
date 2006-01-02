@@ -2,16 +2,14 @@
 
 module WriteHsc where
 
-import Char
+import Data.Char
 import C_BNF
 import SplitBounds
 import Template
-import Parsec
-import Text.ParserCombinators.Parsec.Expr
-import Text.ParserCombinators.Parsec.Token
-import System.Cmd
+import Text.ParserCombinators.Parsec
+import HsfUtils
 import System.Exit
-import Data.FiniteMap
+import qualified Data.Map as Map
 import Data.Maybe
 import Data.List
 import Control.Monad
@@ -20,13 +18,6 @@ import Control.Monad
 
 fldclass = "HSFFIG.FieldAccess.FieldAccess"
 fldmodule = "HSFFIG.FieldAccess"
-
--- A version of words, but works with any lists on any predicate.
-
-parts pred s = case dropWhile pred s of
-                                     [] -> []
-                                     s' -> w : parts pred s''
-                                         where (w, s'') = break pred s'
 
 -------------------------------------------------------------------------------------------
 
@@ -90,16 +81,6 @@ writeModHdr mfn = do let fmfn = finalizeModuleName mfn
                      putStrLn $ splitClose
                      putStrLn $ "\n" ++ splitEnd ++ "\n"
 
-finalizeFileName Nothing = "\"@@INCLUDEFILE@@\""
-finalizeFileName (Just s) = "\""++s++"\""
-
-finalizeModuleName Nothing = "@@MODULENAME@@"
-finalizeModuleName (Just s) = map d2uu (head $ reverse $ parts (== '/') s)
-                                where d2uu c
-                                        | c == '.' = '_'
-                                        | isAlpha c = toUpper c
-                                        | otherwise = c 
-
 writeSplitHeaderX imps rexps mn = do
   putStrLn $ splitOpen
   putStrLn $ ghcopts
@@ -129,7 +110,7 @@ writeSplitHeader imps mn = writeSplitHeaderX imps [] mn
 
 writeConstAccess tus Nothing = return ()
 writeConstAccess tus (Just fn) = 
-  do let cnsts = keysFM $ filterFM constonly tus
+  do let cnsts = Map.keys $ Map.filterWithKey constonly tus
          constonly _ DictDef = True
          constonly _ _ = False
          fmfnc = (finalizeModuleName (Just fn)) ++ "_C"
@@ -140,16 +121,10 @@ writeConstAccess tus (Just fn) =
      return ()
 
 oneconst fn cnst = 
-  do rc <- testconst fn cnst
+  do rc <- testConst (finalizeFileName (Just fn)) cnst
      case rc of
           ExitSuccess -> putStrLn $ "c_" ++ cnst ++ " = #const " ++ cnst
           _ -> return ()
-
-testconst fn cnst = system cmdline
-  where cmdline = "echo '#include " ++ 
-                  (finalizeFileName (Just fn)) ++
-                  "\nstatic int a = " ++
-                  cnst ++ ";' | gcc -pipe -x c -q -fsyntax-only - 2>/dev/null"
 
 ---------------------------------------------------------------------------------------
 
@@ -157,7 +132,7 @@ testconst fn cnst = system cmdline
 -- Then emit all variants as constants similarly to constants themselves.
 
 writeEnums tus tymap fn =
-  do let enums = fmToList $ filterFM enumsonly tymap
+  do let enums = Map.toList $ Map.filterWithKey enumsonly tymap
          enumsonly _ (DictEnum _) = True
          enumsonly _ _ = False
          enumsof (DictEnum e) = map simplifyenum e
@@ -258,15 +233,15 @@ writefields flds fn =
                     putStrLn $ "data D_" ++ fld ++ " = D_" ++ fld
 
 writeStructures tus tymap fn = 
-  do let structs = filterFM structonly tymap
-         typedefs = fmToList $ filterFM tdefonly tymap
+  do let structs = Map.filterWithKey structonly tymap
+         typedefs = Map.toList $ Map.filterWithKey tdefonly tymap
          structonly _ (DictStruct _ _) = True
          structonly _ _ = False
          tdefonly _ (DictDecl _) = True
          tdefonly _ _ = False
-         allfields = nub $ collectfields (eltsFM structs)
+         allfields = nub $ collectfields (Map.elems structs)
          fmfns = (finalizeModuleName fn) ++ "_S"
-         strpairs = fmToList structs
+         strpairs = Map.toList structs
          strnames = map fst strpairs
          submods = map (((fmfns ++ "_") ++) . convname) strnames
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "\n"
@@ -289,84 +264,96 @@ writeStructures tus tymap fn =
      mapM (onestruct tymap fn) strpairs
      return ()
 
+-- Fill out a strinfo data structure.
+
+mkStrInfo strname strdecl =
+  let isanon ('s':'t':'r':'u':'c':'t':'@':s:_) = isDigit s
+      isanon ('u':'n':'i':'o':'n':'@':s:_) = isDigit s
+      isanon _  = False
+  in  StructInfo {
+        strName = strname,
+        trueName = if (isanon strname) then (show strdecl) else (truename strname),
+        convName = convname strname,
+        cSyntax = (show strdecl)
+      }
+
+
+-- Fill out a fldinfo data structure.
+
+mkFldInfo tymap xd = 
+  let state = (dcl2ts . (connectta tymap) . simplifystructdecl) xd
+      sdcl2sd (StructDecl _ s) = head s
+      fldn = (sd2fld . sdcl2sd) xd
+      stt = state2ts state
+      cmap = mapc2hs stt
+      stsp = condmonadify cmap
+      condmonadify t = if (dyn t) then (monadify "IO" t) else t
+      dyn t = case t of
+        (PtrF _ _) -> True
+        other -> False
+      dir = isdirstruct cmap
+      sdecl = ts2ts stsp
+      bit = '|' `elem` sdecl
+      instt =
+        (case isarray stt of
+           True -> "Ptr ("
+           False -> "(" )
+          ++ (case dyn stt of
+                True  -> unfptr sdecl
+                False -> case dir of
+                  True  -> "Ptr " ++ (drop 1 sdecl)
+                  False -> case bit of
+                    True -> drop 1 $ dropWhile (/= '|') sdecl
+                    False -> sdecl) ++ ")"
+      dims = case isarray stt of
+        True -> arrdims stt
+        False -> []
+      arity tsp = case tsp of
+        TApply ts -> (length ts) - 1
+        PtrF _ t -> arity t
+        other -> 0
+      intern = case (Map.lookup ("ID " ++ fldn) tymap) of
+        Just (DictId n) -> "___" ++ (show n) ++ "___"
+        other -> ""
+      isarray tt = case tt of
+        TString ts -> isarrt ts
+        TString' ts -> isarrt ts
+        PtrV _ t -> isarray t
+        other -> False
+      arrdims tt = case tt of
+        TString ts -> (fst . splitarrt) ts
+        TString' ts -> (fst . splitarrt) ts
+        PtrV _ t -> arrdims t
+        other -> []
+  in  FieldInfo {
+        fldName = fldn,
+        fldType = sdecl,
+        instType = instt,
+        fldTypeString = stsp,
+        fldArity = arity stsp,
+        fldDims = dims,
+        isDynamic = dyn stt,
+        isDirect = dir,
+        isBitField = bit,
+        isVariadic = isvariadic cmap,
+        internId = intern
+      }
+
+-- Toplevel wrapper to fill out structure and field descriptors.
+
+mkStructsInfo tymap strname strdecl = 
+  let xdecls = decls strdecl
+      decls (DictStruct su s) = expdecls s
+      strinfo = mkStrInfo strname strdecl
+      fldinfos = map (mkFldInfo tymap) xdecls
+  in  (strinfo, fldinfos)
+
 -- Write complete definition for a single structure/union.
 
 onestruct tymap fn (strname,strdecl) = 
-  do let csyntax = show strdecl
-         xdecls = decls strdecl
-         decls (DictStruct su s) = expdecls s
-         strm = fmfns ++ "_" ++ (convname strname)
+  do let strm = fmfns ++ "_" ++ (convname strname)
          fmfns = (finalizeModuleName fn) ++ "_S"
-         isanon ('s':'t':'r':'u':'c':'t':'@':s:_) = isDigit s
-         isanon ('u':'n':'i':'o':'n':'@':s:_) = isDigit s
-         isanon _  = False
-         strinfo = StructInfo {
-           strName = strname,
-           trueName = if (isanon strname) then (show strdecl) else (truename strname),
-           convName = convname strname,
-           cSyntax = (show strdecl)
-         }
-         mkfldinfo xd = 
-           let state = (dcl2ts . (connectta tymap) . simplifystructdecl) xd
-               sdcl2sd (StructDecl _ s) = head s
-               fldn = (sd2fld . sdcl2sd) xd
-               stt = state2ts state
-               cmap = mapc2hs stt
-               stsp = condmonadify cmap
-               condmonadify t = if (dyn t) then (monadify "IO" t) else t
-               dyn t = case t of
-                 (PtrF _ _) -> True
-                 other -> False
-               dir = isdirstruct cmap
-               sdecl = ts2ts stsp
-               bit = '|' `elem` sdecl
-               instt = 
-                 (case isarray stt of
-                    True -> "Ptr ("
-                    False -> "(" )
-                   ++ (case dyn stt of
-                         True  -> unfptr sdecl
-                         False -> case dir of
-                           True  -> "Ptr " ++ (drop 1 sdecl)
-                           False -> case bit of
-                             True -> drop 1 $ dropWhile (/= '|') sdecl
-                             False -> sdecl) ++ ")"
-               dims = case isarray stt of
-                 True -> arrdims stt
-                 False -> []
-               arity tsp = case tsp of
-                 TApply ts -> (length ts) - 1
-                 PtrF _ t -> arity t
-                 other -> 0
-               intern = case (lookupFM tymap ("ID " ++ fldn)) of
-                 Just (DictId n) -> "___" ++ (show n) ++ "___"
-                 other -> ""
-               isarray tt = case tt of
-                 TString ts -> isarrt ts
-                 TString' ts -> isarrt ts
-                 PtrV _ t -> isarray t
-                 other -> False
-               arrdims tt = case tt of
-                 TString ts -> (fst . splitarrt) ts
-                 TString' ts -> (fst . splitarrt) ts
-                 PtrV _ t -> arrdims t
-                 other -> []
-           in
-           FieldInfo {
-             fldName = fldn,
-             fldType = sdecl,
-             instType = instt,
-             fldTypeString = stsp,
-             fldArity = arity stsp,
-             fldDims = dims,
-             isDynamic = dyn stt,
-             isDirect = dir,
-             isBitField = bit,
-             isVariadic = isvariadic cmap,
-             internId = intern
-           }
-         fldinfos = map mkfldinfo xdecls
-
+         (strinfo, fldinfos) = mkStructsInfo tymap strname strdecl
      putStrLn ""
      putStrLn "--"
      putStrLn ""
@@ -744,7 +731,7 @@ connectta tymap (DeclarationS rts decl) =
     connectta' tymap (DeclarationS rts decl) = 
       let decl' = ctad tymap decl in
         case (length rts) of
-          1 -> case (lookupFM tymap (head rts)) of
+          1 -> case (Map.lookup (head rts) tymap) of
                  Nothing -> DeclarationS rts decl'
                  Just (DictDecl (Declaration adss [aid] at)) -> 
                    cncd tymap (connectta tymap $ simplifydecl adss aid) decl'
@@ -1037,7 +1024,7 @@ onefunc tymap ifn dss ats id =
          tsf = ts2ts tsi
          tsg = ts2ts tsp
          sym = id2name id
-         intern = case (lookupFM tymap ("ID " ++ sym)) of
+         intern = case (Map.lookup ("ID " ++ sym) tymap) of
                   Just (DictId n) -> "___" ++ (show n) ++ "___"
                   other -> ""
          arity (TApply ts) = (length ts) - 1

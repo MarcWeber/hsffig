@@ -3,7 +3,6 @@ module Main where
 import C_Lexer
 import ProcHdr
 import WriteHsc
-import Data.FiniteMap
 
 main = do
   s <- getContents

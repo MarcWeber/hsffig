@@ -9,11 +9,10 @@
 
 module C_BNF where
 
-import Data.FiniteMap
-import Char
+import qualified Data.Map as Map
+import Data.Char
 import C_Lexer
-import Parsec
-import ParsecPos
+import Text.ParserCombinators.Parsec
 import TokenOps
 
 
@@ -46,14 +45,14 @@ instance Show DictElement where
 
 data PState = PState {
   ucount :: Integer,                       -- unique counter
-  tymap  :: FiniteMap String DictElement   -- map for typedefs, structs, etc.
+  tymap  :: Map.Map String DictElement     -- map for typedefs, structs, etc.
 }
 
 type TParser a = GenParser Token PState a
 
 afm rn di st = PState {
   ucount = (ucount st) + 1,
-  tymap = addToFM (tymap st) rn di
+  tymap = Map.insert rn di (tymap st)
 }
 
 upducnt st = PState {
@@ -61,7 +60,7 @@ upducnt st = PState {
   tymap = tymap st
 }
 
-lookmap st = lookupFM (tymap st)
+lookmap st = flip Map.lookup (tymap st)
 
 getucnt st = do
   updateState upducnt
@@ -123,7 +122,7 @@ recordenum i eds = do
 data TransUnit = TransUnitFun  FunDef
                | TransUnitDecl Declaration
                | TypedefDecl   Declaration String
-               | TransUnitDef  String
+               | TransUnitDef  String String
                | Ignored       String
                deriving (Show)
 
@@ -143,7 +142,7 @@ translation_unit' =
           case t of
                  (TKDEF s p) -> do let c = ppdef2name s
                                    updateState (afm c DictDef)
-                                   return (TransUnitDef c)
+                                   return (TransUnitDef c s)
                  _ -> return (Ignored (showTok t)))
   <?> "translation_unit"
 

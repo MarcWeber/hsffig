@@ -7,7 +7,7 @@ module Main where
 import System.Environment
 import System.IO
 import Control.Monad
-import Maybe
+import Data.Maybe
 
 import SplitBounds
 

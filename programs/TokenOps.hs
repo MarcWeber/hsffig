@@ -3,8 +3,8 @@
 module TokenOps where
 
 import C_Lexer
-import Parsec
-import ParsecPos
+import Text.ParserCombinators.Parsec
+import Text.ParserCombinators.Parsec.Pos
 
 showTok (TCOMM_OPEN _) = "/*"
 showTok (TCOMM_CLOSE _) = "*/"

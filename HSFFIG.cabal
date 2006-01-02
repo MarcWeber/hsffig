@@ -5,8 +5,8 @@ License-file:	License.txt
 Copyright:	2005, Dimitry Golubovsky
 Author:		Dimitry Golubovsky
 Maintainer:	golubovsky@gmail.com
-Stability:	experimental
-Homepage:	hsffig.sourceforge.net
+Stability:	stable
+Homepage:	http://hsffig.sourceforge.net
 Synopsis:	A tool which reads a C include file and generates FFI import declarations
 Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes a 
 		C library include file (.h) and generates Haskell Foreign Functions Interface 
@@ -15,23 +15,28 @@ Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes
 		Compiler and Preprocessor are used. Auto-generated Haskell modules may be 
 		imported into an application to get access to the foreign library's 
 		functions and variables.
-Tested-with:	GHC==6.2.2
-Build-depends:	base, text, hxt
+Tested-with:	GHC==6.4.1
+Build-depends:	base, parsec, hxt
 Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses
 
 Executable:	hsffig
 Main-is:	hsffig.hs
-Hs-source-dir:	programs
-Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template
+Hs-source-dirs:	programs
+Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils
 
 Executable:     testparser
 Main-is:        testparser.hs
-Hs-source-dir:  programs
+Hs-source-dirs:  programs
 Other-modules:  C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds
 
 Executable:	splitter
 Main-is:	splitter.hs
-Hs-source-dir:	programs
+Hs-source-dirs:	programs
 Other-modules:	SplitBounds
+
+Executable:     xmldump
+Main-is:        xmldump.hs
+Hs-source-dirs:  programs
+Other-modules:  C_Lexer, ProcHdr, TokenOps, C_BNF, WriteXml, SplitBounds, WriteHsc, Template, HsfUtils
 

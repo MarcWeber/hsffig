@@ -4,10 +4,9 @@ module ProcHdr where
 
 import C_Lexer
 import C_BNF
-import Parsec
-import ParsecPos
+import Text.ParserCombinators.Parsec
 import TokenOps
-import Data.FiniteMap
+import qualified Data.Map as Map
 
 -- Extract file name from a TKFILE token
 
@@ -38,7 +37,7 @@ isCDef (TKDEF _ _)  = False
 isCDef (TKFILE _ _) = False
 isCDef _            = True
 
-procHeader shs = runParser bnfParser (PState 0 emptyFM) "" $  
+procHeader shs = runParser bnfParser (PState 0 Map.empty) "" $  
   ((ppdefsFrom shs) ++ (cdefsFrom shs)) 
     where ppdefsFrom l = isPpDef `filter` l
           cdefsFrom  l = isCDef `filter` l
