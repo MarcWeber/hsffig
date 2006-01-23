@@ -1,0 +1,37 @@
+define make-library
+$(AWK) '\
+BEGIN {\
+  argbuf=""\
+}\
+{\
+  argbuf=argbuf " " $$0 ;\
+  if (length(argbuf) > 16384) {\
+    system ("$(AR) qv $@ " argbuf) ;\
+    argbuf=""\
+  }\
+}\
+END {\
+  system ("$(AR) qv $@ " argbuf)\
+}\
+'
+endef
+
+lib%.a : %.hsc
+	echo "include Makefile" > $*_depend
+	$(GHC) -package HSFFIG -M $**.hs -optdep-f -optdep$*_depend
+	$(GHC) -c $*_hsc.c
+	$(MAKE) -f $*_depend $*_S_t.o $*_S_n.o $*_S_d.o $*_C.o $*_S.o $*.o
+	rm -f $@
+	$(AR) cq $@ $*_hsc.o
+	find . -name '$**.o' | grep 'split/' | $(make-library)
+
+
+%.hi %.o : %.hs
+	-mkdir $*_split 2>/dev/null
+	echo "int dummy_$*_stub_entry;" | $(GCC) -x c -c -o $*.o -
+	$(GHC) -split-objs -c -package HSFFIG $<
+	touch $*.o $*.hi
+
+%.hi : %.o
+	true
+

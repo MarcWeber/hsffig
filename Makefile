@@ -1,6 +1,6 @@
 #	A Makefile for the HSFFIG-1.1 Package
 
-all: programs/Template.hs
+all: programs/Template.hs programs/Makefile.hs
 
 clean:
 	find . -name '*.o' -exec rm -f \{\} \;
@@ -11,8 +11,14 @@ clean:
 	rm -f cabal-setup
 
 programs/Template.hs: include/template-hsffig.h mkhstmpl
-	mkhstmpl <include/template-hsffig.h >programs/Template.hs
+	./mkhstmpl <include/template-hsffig.h >programs/Template.hs
 
 mkhstmpl: mkhstmpl.hs
 	ghc --make mkhstmpl.hs -o mkhstmpl
+
+programs/Makefile.hs: include/template-makefile mkmktmpl
+	./mkmktmpl <include/template-makefile >programs/Makefile.hs
+
+mkmktmpl: mkmktmpl.hs
+	ghc --make mkmktmpl.hs -o mkmktmpl
 

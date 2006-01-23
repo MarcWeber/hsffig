@@ -13,12 +13,17 @@ parts pred s = case dropWhile pred s of
                                      s' -> w : parts pred s''
                                          where (w, s'') = break pred s'
 
+-- Run a compiler to check if a #define is good for inclusion into the
+-- produced .hsc code: a #define is a simple constant, w/o arguments.
 
-testConst fn cnst = system cmdline
+testConst fn cnst gcc = system cmdline
   where cmdline = "echo '#include " ++ 
                   fn ++
                   "\nstatic int a = " ++
-                  cnst ++ ";' | gcc -pipe -x c -q -fsyntax-only - 2>/dev/null"
+                  cnst ++ ";' | " ++ gcc ++ " -pipe -x c -q -fsyntax-only - 2>/dev/null"
+
+-- Based on the include file name availability, produce either the file / module names
+-- themselves or placeholders for further sed'ing.
 
 finalizeFileName Nothing = "\"@@INCLUDEFILE@@\""
 finalizeFileName (Just s) = "\""++s++"\""
@@ -29,4 +34,11 @@ finalizeModuleName (Just s) = map d2uu (head $ reverse $ parts (== '/') s)
                                         | c == '.' = '_'
                                         | isAlpha c = toUpper c
                                         | otherwise = c
+
+-- Interleave a list of strings with a string.
+
+intlv [] _ = ""
+intlv [x] _ = x
+intlv (rt:rts) s = rt ++ s ++ (intlv rts s)
+
 

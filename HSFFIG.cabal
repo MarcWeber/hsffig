@@ -15,25 +15,34 @@ Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes
 		Compiler and Preprocessor are used. Auto-generated Haskell modules may be 
 		imported into an application to get access to the foreign library's 
 		functions and variables.
+		Cabal >= 1.1.3 is needed as one coming with GHC 6.4.1 does not install
+		executables properly.
 Tested-with:	GHC==6.4.1
-Build-depends:	base, parsec, hxt
+Build-depends:	base, parsec, hxt, Cabal>=1.1.3, FilePath, unix
 Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses
+
+Executable:	ffipkg
+Main-is:	ffipkg.hs
+Hs-source-dirs:	programs
+Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils,
+                HGmain, SPmain, Makefile
 
 Executable:	hsffig
 Main-is:	hsffig.hs
 Hs-source-dirs:	programs
-Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils
+Other-modules:	HGmain,
+                C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils
 
 Executable:     testparser
 Main-is:        testparser.hs
-Hs-source-dirs:  programs
+Hs-source-dirs: programs
 Other-modules:  C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds
 
 Executable:	splitter
 Main-is:	splitter.hs
 Hs-source-dirs:	programs
-Other-modules:	SplitBounds
+Other-modules:	SPmain, SplitBounds
 
 Executable:     xmldump
 Main-is:        xmldump.hs

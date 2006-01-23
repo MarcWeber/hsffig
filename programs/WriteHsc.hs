@@ -108,20 +108,20 @@ writeSplitHeader imps mn = writeSplitHeaderX imps [] mn
 -- This requires knowledge of the header file name. Therefore if it was impossible
 -- to determine it, constants will not be included.
 
-writeConstAccess tus Nothing = return ()
-writeConstAccess tus (Just fn) = 
+writeConstAccess tus gcc Nothing = return ()
+writeConstAccess tus gcc (Just fn) = 
   do let cnsts = Map.keys $ Map.filterWithKey constonly tus
          constonly _ DictDef = True
          constonly _ _ = False
          fmfnc = (finalizeModuleName (Just fn)) ++ "_C"
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfnc ++ "\n"
      writeSplitHeader [] fmfnc
-     mapM (oneconst fn) cnsts 
+     mapM (oneconst fn gcc) cnsts 
      putStrLn $ "\n" ++ splitEnd ++ "\n"
      return ()
 
-oneconst fn cnst = 
-  do rc <- testConst (finalizeFileName (Just fn)) cnst
+oneconst fn gcc cnst = 
+  do rc <- testConst (finalizeFileName (Just fn)) cnst gcc
      case rc of
           ExitSuccess -> putStrLn $ "c_" ++ cnst ++ " = #const " ++ cnst
           _ -> return ()
@@ -619,12 +619,6 @@ ds2str (DeclSpecType (TypeSpecEnum (EnumSpec "" _))) =
   error $ "unfixed declaration of anonymous enum"
 ds2str (DeclSpecType (TypeSpecEnum (EnumSpec s _))) = "int"
 ds2str z = error $ "ds2str: " ++ (show z)
-
--- Interleave a list of strings with a string.
-
-intlv [] _ = ""
-intlv [x] _ = x
-intlv (rt:rts) s = rt ++ s ++ (intlv rts s)
 
 -- Simplify a Declaration by keeping only type declarations, Declarators
 -- without initializers, etc.
