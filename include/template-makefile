@@ -17,21 +17,21 @@ END {\
 endef
 
 lib%.a : %.hsc
-	echo "include Makefile" > $*_depend
+	$(ECHO) "include Makefile" > $*_depend
 	$(GHC) -package HSFFIG -M $**.hs -optdep-f -optdep$*_depend
 	$(GHC) -c $*_hsc.c
 	$(MAKE) -f $*_depend $*_S_t.o $*_S_n.o $*_S_d.o $*_C.o $*_S.o $*.o
-	rm -f $@
+	$(RM) -f $@
 	$(AR) cq $@ $*_hsc.o
-	find . -name '$**.o' | grep 'split/' | $(make-library)
+	$(FIND) . -name '$**.o' | $(GREP) 'split/' | $(make-library)
 
 
 %.hi %.o : %.hs
-	-mkdir $*_split 2>/dev/null
-	echo "int dummy_$*_stub_entry;" | $(GCC) -x c -c -o $*.o -
+	-$(MKDIR) $*_split 2>/dev/null
+	$(ECHO) "int dummy_$*_stub_entry;" | $(GCC) -x c -c -o $*.o -
 	$(GHC) -split-objs -c -package HSFFIG $<
-	touch $*.o $*.hi
+	$(TOUCH) $*.o $*.hi
 
 %.hi : %.o
-	true
+	$(TRUE)
 

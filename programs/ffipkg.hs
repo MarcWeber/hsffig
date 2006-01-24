@@ -27,7 +27,6 @@ import SPmain
 
 data PkgArg = Verbose
             | ShowVn
-            | MakeFile
             | InclFile
             | IncPath String
             | LibPath String
@@ -51,7 +50,6 @@ pkgOpt :: [OptDescr PkgArg]
 pkgOpt = [
   Option ['v']  ["verbose"]         (NoArg Verbose)      "provide verbose output",
   Option ['s']  ["static"]          (NoArg Static)       "prefer static libraries",
-  Option ['m']  ["makefile"]        (NoArg MakeFile)     "stop after writing Makefile",
   Option ['i']  ["header"]          (NoArg InclFile)     "stop after writing package include file",
   Option ['?','h'] ["help"]         (NoArg HelpMsg)      "print this help message",
   Option ['I']  []                  (ReqArg IncPath "")  "include files location (may be multiple)",
@@ -179,7 +177,6 @@ updOptInfo :: OptInfo -> PkgArg -> OptInfo
 
 updOptInfo oi Static      = oi {useStatic = True}
 updOptInfo oi Verbose     = oi {beVerbose = True}
-updOptInfo oi MakeFile    = oi {mkfOnly = True}
 updOptInfo oi InclFile    = oi {hdrOnly = True}
 updOptInfo oi (Make s)    = oi {makePath = Just s}
 updOptInfo oi (Awk s)     = oi {awkPath = Just s}
@@ -255,6 +252,20 @@ chkExecVerb b (s, mfp) =
                   infoMsgLn b $ if e then "OK" else "Failed"
                   return (s, e)
 
+-- Find an executable program verbosely.
+
+findExecVerb :: Bool -> String -> IO (String, Maybe FilePath)
+
+findExecVerb b s = do
+  infoMsg b $ s ++ " ... "
+  mfp <- findExec s
+  e <- chkExec mfp
+  if e
+    then do infoMsgLn b $ fromJust mfp
+            return (s, mfp)
+    else do infoMsgLn b "Not found/ not executable: check your PATH"
+            return (s, Nothing)
+
 -- Create a file and open a Fd on it.
 
 fileToFd :: FilePath -> IO Fd
@@ -271,6 +282,12 @@ redirFd new old fn = do
   closeFd new
   fn
 
+-- List of extra programs needed by Makefile: they are expected
+-- to be on the PATH. If any of them is not on the PATH,
+-- the program aborts.
+
+xProgs = ["echo", "rm", "find", "grep", "mkdir", "touch", "true"]
+
 -- The Main Program.
 
 main = do
@@ -278,14 +295,22 @@ main = do
   dopt <- defaultOptInfo >>= (return . (guessPkgName . updOptions opts))
   putStrLn $ show opts
   putStrLn $ show dopt
+  let minusI = map ("-I" ++) (reverse $ inclDirs dopt)
+      fileBase = "HS_" ++ pkgName dopt ++ "_H"
+      hscFile = fileBase `joinFileExt` "hsc"
+      hsuFile = fileBase `joinFileExt` "hs_unsplit"
+      libFile = "lib" ++ (fileBase `joinFileExt` "a")
+      cabalFile = (pkgName dopt) `joinFileExt` "cabal"
   infoMsgLn (beVerbose dopt) "Checking existence of the programs supplied..."
-  excs <- mapM (chkExecVerb (beVerbose dopt)) [("make",    makePath dopt), 
+  excs <- mapM (chkExecVerb $ beVerbose dopt) [("make",    makePath dopt), 
                                                ("awk",     awkPath dopt),
                                                ("ar",      arPath dopt),
                                                ("gcc",     gccPath dopt),
                                                ("ghc",     ghcPath dopt),
                                                ("hsc2hs",  hsc2hsPath dopt)]
-  let exfail = [s | (s, b) <- excs, not b]
+  infoMsgLn (beVerbose dopt) "Checking existence of the programs needed by Makefile..."
+  progs <- mapM (findExecVerb $ beVerbose dopt) xProgs
+  let exfail = [s | (s, b) <- excs, not b] ++ [s | (s, m) <- progs, m == Nothing]
   when ((length exfail) > 0) $ do
     putStrLn $ "Failed: The following programs cannot execute:"
     mapM putStrLn exfail 
@@ -298,7 +323,7 @@ main = do
   when (hdrOnly dopt) $ exitWith (ExitSuccess)
   infoMsgLn (beVerbose dopt) "Running gcc and producing the hsc file..."
   (fd1, fd2) <- createPipe
-  hscfd <- fileToFd ("HS_" ++ pkgName dopt ++ "_H.hsc")
+  hscfd <- fileToFd hscFile
   hscpid <- forkProcess $ redirFd fd1 0 $
                           redirFd fd2 (-1) $
                           redirFd hscfd 1 $
@@ -308,7 +333,7 @@ main = do
                           executeFile (fromJust $ gccPath dopt)
                                       False
                                       (["-E", "-dD"] ++
-                                       map ("-I" ++) (inclDirs dopt) ++
+                                       minusI ++
                                        [pkgInclude dopt])
                                       Nothing
   closeFd hscfd
@@ -326,16 +351,20 @@ main = do
   infoMsgLn (beVerbose dopt) "Running hsc2hs..."
   h2hpid <- forkProcess $ executeFile (fromJust $ hsc2hsPath dopt)
                                       False
-                                      (["-t", "/dev/null", "HS_" ++ pkgName dopt ++ "_H.hsc", 
-                                       "-o", "HS_" ++ pkgName dopt ++ "_H.hs_unsplit"] ++
-                                         map ("-I" ++) (inclDirs dopt))
+                                      (["-t", "/dev/null", hscFile, 
+                                       "-o", hsuFile] ++
+                                         minusI)
                                       Nothing
   h2hrt <- getProcessStatus True False h2hpid
   when (h2hrt /= Just (Exited ExitSuccess)) $ do
     putStrLn "Failed: abnormal termination of hsc2hs"
     exitWith (ExitFailure 3)
   infoMsgLn (beVerbose dopt) "Running splitter..."
-  modlist <- splitterMain ["HS_" ++ pkgName dopt ++ "_H.hs_unsplit"]
+  modlist <- splitterMain [hsuFile]
+  when ((length modlist) == 0) $ do
+    putStrLn "Failed: splitter yielded empty list of modules"
+    exitWith (ExitFailure 4)
+  infoMsgLn (beVerbose dopt) $ "Splitter yielded " ++ show (length modlist) ++ " modules"
   infoMsgLn (beVerbose dopt) "Creating Makefile..."
   mkffd <- fileToFd "Makefile"
   mkfpid <- forkProcess $ redirFd mkffd 1 $ do
@@ -345,18 +374,46 @@ main = do
     putStrLn $ "AR = " ++ (fromJust $ arPath dopt)
     putStrLn $ "AWK = " ++ (fromJust $ awkPath dopt)
     putStrLn $ "MAKE = " ++ (fromJust $ makePath dopt)
-    putStrLn $ "GCC = " ++ (fromJust $ gccPath dopt) ++ " " ++
-                (concat $ map (\s -> "-I" ++ s ++ " ") (inclDirs dopt))
-    putStrLn $ "GHC = " ++ (fromJust $ ghcPath dopt) ++ " " ++
-                (concat $ map (\s -> "-I" ++ s ++ " ") (inclDirs dopt))
+    putStrLn $ "GCC = " ++ (fromJust $ gccPath dopt) ++ " " ++ intlv minusI " "
+    putStrLn $ "GHC = " ++ (fromJust $ ghcPath dopt) ++ " " ++ intlv minusI " "
+    mapM (\(s, m) -> putStrLn $ (map toUpper s) ++ " = " ++ fromJust m) progs
     putStrLn $ ""
-    putStrLn $ "all: libHS_" ++ (pkgName dopt) ++ "_H.a"
+    putStrLn $ "all: " ++ libFile
     putStrLn $ ""
     writeMakefile
     return ()
   closeFd mkffd
   mkfrt <- getProcessStatus True False mkfpid
-  when (h2hrt /= Just (Exited ExitSuccess)) $ do
+  when (mkfrt /= Just (Exited ExitSuccess)) $ do
     putStrLn "Failed: abnormal termination while writing Makefile"
-    exitWith (ExitFailure 4)
+    exitWith (ExitFailure 5)
+  infoMsgLn (beVerbose dopt) $ "Creating " ++ cabalFile ++ "..."
+  cabfd <- fileToFd cabalFile
+  cabpid <- forkProcess $ redirFd cabfd 1 $ do
+    putStrLn $ "-- " ++ cabalFile ++ " is generated automatically: do not edit"
+    putStrLn $ "Name: " ++ pkgName dopt
+    putStrLn $ "Version: " ++ pkgVersion dopt
+    putStrLn $ "Build-depends: HSFFIG"
+    putStrLn $ "Exposed-modules: " ++ head modlist
+    putStrLn $ "Other-modules: " ++ intlv (drop 1 modlist) ", "
+    return ()
+  closeFd cabfd
+  cabrt <- getProcessStatus True False cabpid
+  when (cabrt /= Just (Exited ExitSuccess)) $ do
+    putStrLn $ "Failed: abnormal termination while writing " ++ cabalFile
+    exitWith (ExitFailure 6)
+  infoMsgLn (beVerbose dopt) "Creating Setup.hs"
+  setfd <- fileToFd "Setup.hs"
+  setpid <- forkProcess $ redirFd setfd 1 $ do
+    putStrLn $ "-- Setup.hs is generated automatically: do not edit"
+    putStrLn $ "module Main (main) where"
+    putStrLn $ "import Distribution.Simple (defaultMainWithHooks, defaultUserHooks)"
+    putStrLn $ "main = defaultMainWithHooks defaultUserHooks"
+    return ()
+  closeFd setfd
+  setrt <- getProcessStatus True False setpid
+  when (setrt /= Just (Exited ExitSuccess)) $ do
+    putStrLn $ "Failed: abnormal termination while writing Setup.hs"
+    exitWith (ExitFailure 7)
+  exitWith ExitSuccess
 
