@@ -1,24 +1,26 @@
 #	A Makefile for the HSFFIG-1.1 Package
 
-all: programs/Template.hs programs/Makefile.hs
+all: programs/Template.hs programs/Makefile.hs programs/Setupfile.hs
 
 clean:
 	find . -name '*.o' -exec rm -f \{\} \;
 	find . -name '*.hi' -exec rm -f \{\} \;
 	rm -f programs/Template.hs
-	rm -f mkhstmpl
+	rm -f programs/Makefile.hs
+	rm -f programs/Setup.hs
+	rm -f mktmpl
 	runghc Setup.hs clean
 	rm -f cabal-setup
 
-programs/Template.hs: include/template-hsffig.h mkhstmpl
-	./mkhstmpl <include/template-hsffig.h >programs/Template.hs
+programs/Template.hs: include/template-hsffig.h mktmpl
+	./mktmpl Template <include/template-hsffig.h >programs/Template.hs
 
-mkhstmpl: mkhstmpl.hs
-	ghc --make mkhstmpl.hs -o mkhstmpl
+mktmpl: mktmpl.hs
+	ghc --make mktmpl.hs -o mktmpl
 
-programs/Makefile.hs: include/template-makefile mkmktmpl
-	./mkmktmpl <include/template-makefile >programs/Makefile.hs
+programs/Makefile.hs: include/template-makefile mktmpl
+	./mktmpl Makefile <include/template-makefile >programs/Makefile.hs
 
-mkmktmpl: mkmktmpl.hs
-	ghc --make mkmktmpl.hs -o mkmktmpl
+programs/Setupfile.hs: include/template-setup mktmpl
+	./mktmpl Setupfile <include/template-setup >programs/Setupfile.hs
 

@@ -19,6 +19,7 @@ import Data.Version
 import Data.Maybe
 import Data.Char
 import Makefile
+import Setupfile
 import HsfUtils
 import HGmain
 import SPmain
@@ -286,7 +287,7 @@ redirFd new old fn = do
 -- to be on the PATH. If any of them is not on the PATH,
 -- the program aborts.
 
-xProgs = ["echo", "rm", "find", "grep", "mkdir", "touch", "true"]
+xProgs = ["echo", "rm", "find", "grep", "mkdir", "touch", "true", "cp", "mv", "ld"]
 
 -- The Main Program.
 
@@ -296,6 +297,7 @@ main = do
   putStrLn $ show opts
   putStrLn $ show dopt
   let minusI = map ("-I" ++) (reverse $ inclDirs dopt)
+      minusL = map ("-L" ++) (reverse $ libDirs dopt)
       fileBase = "HS_" ++ pkgName dopt ++ "_H"
       hscFile = fileBase `joinFileExt` "hsc"
       hsuFile = fileBase `joinFileExt` "hs_unsplit"
@@ -378,8 +380,6 @@ main = do
     putStrLn $ "GHC = " ++ (fromJust $ ghcPath dopt) ++ " " ++ intlv minusI " "
     mapM (\(s, m) -> putStrLn $ (map toUpper s) ++ " = " ++ fromJust m) progs
     putStrLn $ ""
-    putStrLn $ "all: " ++ libFile
-    putStrLn $ ""
     writeMakefile
     return ()
   closeFd mkffd
@@ -393,9 +393,13 @@ main = do
     putStrLn $ "-- " ++ cabalFile ++ " is generated automatically: do not edit"
     putStrLn $ "Name: " ++ pkgName dopt
     putStrLn $ "Version: " ++ pkgVersion dopt
-    putStrLn $ "Build-depends: HSFFIG"
+    putStrLn $ "Build-depends: base, HSFFIG"
     putStrLn $ "Exposed-modules: " ++ head modlist
-    putStrLn $ "Other-modules: " ++ intlv (drop 1 modlist) ", "
+    putStrLn $ "Other-modules:\n" ++ intlv (map ("  " ++) (drop 1 modlist)) ",\n"
+    when (length (libDirs dopt) > 0) $ 
+      putStrLn $ "Extra-lib-dirs:\n" ++ intlv (map ("  " ++) (reverse (libDirs dopt))) ",\n"
+    when (length (libFiles dopt) > 0) $
+      putStrLn $ "Extra-libraries:\n" ++ intlv (map ("  " ++) (reverse ( libFiles dopt))) ",\n"
     return ()
   closeFd cabfd
   cabrt <- getProcessStatus True False cabpid
@@ -406,9 +410,7 @@ main = do
   setfd <- fileToFd "Setup.hs"
   setpid <- forkProcess $ redirFd setfd 1 $ do
     putStrLn $ "-- Setup.hs is generated automatically: do not edit"
-    putStrLn $ "module Main (main) where"
-    putStrLn $ "import Distribution.Simple (defaultMainWithHooks, defaultUserHooks)"
-    putStrLn $ "main = defaultMainWithHooks defaultUserHooks"
+    writeSetupfile
     return ()
   closeFd setfd
   setrt <- getProcessStatus True False setpid

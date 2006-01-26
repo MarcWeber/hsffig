@@ -26,7 +26,7 @@ Executable:	ffipkg
 Main-is:	ffipkg.hs
 Hs-source-dirs:	programs
 Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils,
-                HGmain, SPmain, Makefile
+                HGmain, SPmain, Makefile Setupfile
 
 Executable:	hsffig
 Main-is:	hsffig.hs

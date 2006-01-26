@@ -16,14 +16,30 @@ END {\
 '
 endef
 
-lib%.a : %.hsc
-	$(ECHO) "include Makefile" > $*_depend
-	$(GHC) -package HSFFIG -M $**.hs -optdep-f -optdep$*_depend
-	$(GHC) -c $*_hsc.c
-	$(MAKE) -f $*_depend $*_S_t.o $*_S_n.o $*_S_d.o $*_C.o $*_S.o $*.o
+BASE = HS_$(PKG)_H
+
+all:
+	@$(ECHO) Please do not run make directly:
+	@$(ECHO) Use runghc Setup.hs to build the library.
+
+build : loc $(LOC)/libHS$(PKG)-$(VER).a $(LOC)/HS$(PKG)-$(VER).o
+	$(CP) -p *.hi $(LOC)
+
+loc:
+	-$(MKDIR) -p $(LOC)
+
+$(LOC)/HS$(PKG)-$(VER).o : $(LOC)/libHS$(PKG)-$(VER).a
+	$(LD) -r --whole-archive -o $@ $<
+
+$(LOC)/libHS$(PKG)-$(VER).a : $(BASE).hsc
+	$(ECHO) "include Makefile" > $(BASE)_depend
+	$(GHC) -package HSFFIG -M $(BASE)*.hs -optdep-f -optdep$(BASE)_depend
+	$(GHC) -c $(BASE)_hsc.c
+	$(MAKE) -f $(BASE)_depend $(BASE)_S_t.o $(BASE)_S_n.o $(BASE)_S_d.o \
+		$(BASE)_C.o $(BASE)_S.o $(BASE).o
 	$(RM) -f $@
-	$(AR) cq $@ $*_hsc.o
-	$(FIND) . -name '$**.o' | $(GREP) 'split/' | $(make-library)
+	$(AR) cq $@ $(BASE)_hsc.o
+	$(FIND) . -name '$(BASE)*.o' | $(GREP) 'split/' | $(make-library)
 
 
 %.hi %.o : %.hs
