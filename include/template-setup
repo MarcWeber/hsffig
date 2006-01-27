@@ -1,7 +1,25 @@
 
 module Main (main) where
 
-import Distribution.Simple (defaultMainWithHooks, defaultUserHooks)
+import Control.Monad
+import System.Process
+import Distribution.Simple 
+import Distribution.PackageDescription
+import Distribution.Package
+import Distribution.Simple.Configure 
 
 main :: IO ()
-main = defaultMainWithHooks defaultUserHooks
+main = defaultMainWithHooks defaultUserHooks {
+  buildHook = myBuildHook
+}
+
+myBuildHook pd lbi verb ppshs = do
+  let pkg = pkgName $ package pd
+      ver = showVersion $ pkgVersion $ package pd
+      loc = buildDir lbi
+      mkcmd = "make build PKG=" ++ pkg ++ " VER=" ++ ver ++ " LOC=" ++ loc
+  when (verb > 0) $ putStrLn $ "Running command:" ++ mkcmd
+  ec <- runCommand mkcmd >>= waitForProcess
+  when (verb > 0) $ putStrLn $ "Command exit code: " ++ (show ec)
+  return ()
+
