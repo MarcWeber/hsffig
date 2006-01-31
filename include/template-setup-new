@@ -4,6 +4,7 @@ module Main (main) where
 import Control.Monad
 import System.Process
 import System.Exit
+import Distribution.Setup
 import Distribution.Simple 
 import Distribution.PackageDescription
 import Distribution.Package
@@ -18,10 +19,11 @@ main = defaultMainWithHooks defaultUserHooks {
   prePFE = disabledCmd
 }
 
-myBuildHook pd lbi verb ppshs = do
+myBuildHook pd lbi mbuhks bflg = do
   let pkg = pkgName $ package pd
       ver = showVersion $ pkgVersion $ package pd
       loc = buildDir lbi
+      verb = buildVerbose bflg
       mkcmd = "make build PKG=" ++ pkg ++ " VER=" ++ ver ++ " LOC=" ++ loc
   when (verb > 0) $ putStrLn $ "Running command:" ++ mkcmd
   ec <- runCommand mkcmd >>= waitForProcess

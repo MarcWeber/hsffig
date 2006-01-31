@@ -20,6 +20,7 @@ import Data.Maybe
 import Data.Char
 import Makefile
 import Setupfile
+import SetupfileNew
 import HsfUtils
 import HGmain
 import SPmain
@@ -33,7 +34,7 @@ data PkgArg = Verbose
             | LibPath String
             | LibFile String
             | HelpMsg
-            | Static
+            | NewHooks
             | Make    String
             | Awk     String
             | Ar      String
@@ -50,7 +51,7 @@ pkgOpt :: [OptDescr PkgArg]
 
 pkgOpt = [
   Option ['v']  ["verbose"]         (NoArg Verbose)      "provide verbose output",
-  Option ['s']  ["static"]          (NoArg Static)       "prefer static libraries",
+  Option ['n']  ["new-hooks"]       (NoArg NewHooks)     "use newer userHooks interface",
   Option ['i']  ["header"]          (NoArg InclFile)     "stop after writing package include file",
   Option ['?','h'] ["help"]         (NoArg HelpMsg)      "print this help message",
   Option ['I']  []                  (ReqArg IncPath "")  "include files location (may be multiple)",
@@ -101,7 +102,7 @@ data OptInfo = OptInfo {
   pkgName :: String,
   pkgVersion :: String,
   pkgInclude :: String,
-  useStatic :: Bool,
+  useNewHooks :: Bool,
   beVerbose :: Bool,
   mkfOnly :: Bool,
   hdrOnly :: Bool
@@ -176,7 +177,7 @@ defaultOptInfo =
 
 updOptInfo :: OptInfo -> PkgArg -> OptInfo  
 
-updOptInfo oi Static      = oi {useStatic = True}
+updOptInfo oi NewHooks    = oi {useNewHooks = True}
 updOptInfo oi Verbose     = oi {beVerbose = True}
 updOptInfo oi InclFile    = oi {hdrOnly = True}
 updOptInfo oi (Make s)    = oi {makePath = Just s}
@@ -410,7 +411,7 @@ main = do
   setfd <- fileToFd "Setup.hs"
   setpid <- forkProcess $ redirFd setfd 1 $ do
     putStrLn $ "-- Setup.hs is generated automatically: do not edit"
-    writeSetupfile
+    if (useNewHooks dopt) then writeSetupfileNew else writeSetupfile
     return ()
   closeFd setfd
   setrt <- getProcessStatus True False setpid
