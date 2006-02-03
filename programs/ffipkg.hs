@@ -33,6 +33,7 @@ data PkgArg = Verbose
             | IncPath String
             | LibPath String
             | LibFile String
+            | CppOpt  String
             | HelpMsg
             | NewHooks
             | Make    String
@@ -57,7 +58,8 @@ pkgOpt = [
   Option ['I']  []                  (ReqArg IncPath "")  "include files location (may be multiple)",
   Option ['L']  []                  (ReqArg LibPath "")  "library files location (may be multiple)",
   Option ['l']  []                  (ReqArg LibFile "")  "library file to link (may be multiple)",
-  Option ['V']  ["version"]         (NoArg ShowVn)       "show version number",
+  Option ['c']  ["cpp"]             (ReqArg CppOpt  "")  "option for CPP (may be multiple)",
+  Option ['V']  ["version"]         (NoArg ShowVn)       "show program version number",
   Option ['w']  ["package-version"] (ReqArg PkgVn dfVn)  "specify version of the package",
   Option ['p']  ["package-name"]    (ReqArg PkgName "")  "name the package (will be uppercased)"
   ] ++ map pgmOpt [
@@ -99,6 +101,7 @@ data OptInfo = OptInfo {
   libDirs :: [String],
   inclFiles :: [String],
   libFiles :: [String],
+  cppOpts :: [String],
   pkgName :: String,
   pkgVersion :: String,
   pkgInclude :: String,
@@ -161,6 +164,7 @@ defaultOptInfo =
                  `ap` return []
                  `ap` return []
                  `ap` return []
+                 `ap` return []
                  `ap` return ""
                  `ap` return dfVn
                  `ap` return ""
@@ -189,6 +193,7 @@ updOptInfo oi (Hsc2hs s)  = oi {hsc2hsPath = Just s}
 updOptInfo oi (IncPath s) = oi {inclDirs = s : (inclDirs oi)}
 updOptInfo oi (LibPath s) = oi {libDirs = s : (libDirs oi)}
 updOptInfo oi (LibFile s) = oi {libFiles = s : (libFiles oi)}
+updOptInfo oi (CppOpt  s) = oi {cppOpts  = s : (cppOpts  oi)}
 updOptInfo oi (PkgName s) = oi {pkgName = (map toUpper s), 
                                 pkgInclude = "hs_" ++ (map toLower s) `joinFileExt` "h"}
 updOptInfo oi (PkgVn   s) = oi {pkgVersion = showVersion $ strVersion s}
@@ -299,6 +304,7 @@ main = do
   putStrLn $ show dopt
   let minusI = map ("-I" ++) (reverse $ inclDirs dopt)
       minusL = map ("-L" ++) (reverse $ libDirs dopt)
+      minusD = reverse $ cppOpts dopt
       fileBase = "HS_" ++ pkgName dopt ++ "_H"
       hscFile = fileBase `joinFileExt` "hsc"
       hsuFile = fileBase `joinFileExt` "hs_unsplit"
@@ -336,7 +342,7 @@ main = do
                           executeFile (fromJust $ gccPath dopt)
                                       False
                                       (["-E", "-dD"] ++
-                                       minusI ++
+                                       minusI ++ minusD ++
                                        [pkgInclude dopt])
                                       Nothing
   closeFd hscfd
@@ -356,7 +362,7 @@ main = do
                                       False
                                       (["-t", "/dev/null", hscFile, 
                                        "-o", hsuFile] ++
-                                         minusI)
+                                         minusI ++ minusD)
                                       Nothing
   h2hrt <- getProcessStatus True False h2hpid
   when (h2hrt /= Just (Exited ExitSuccess)) $ do
@@ -377,7 +383,8 @@ main = do
     putStrLn $ "AR = " ++ (fromJust $ arPath dopt)
     putStrLn $ "AWK = " ++ (fromJust $ awkPath dopt)
     putStrLn $ "MAKE = " ++ (fromJust $ makePath dopt)
-    putStrLn $ "GCC = " ++ (fromJust $ gccPath dopt) ++ " " ++ intlv minusI " "
+    putStrLn $ "GCC = " ++ (fromJust $ gccPath dopt) ++ " " ++ intlv minusI " " ++ 
+               intlv minusD " "
     putStrLn $ "GHC = " ++ (fromJust $ ghcPath dopt) ++ " " ++ intlv minusI " "
     mapM (\(s, m) -> putStrLn $ (map toUpper s) ++ " = " ++ fromJust m) progs
     putStrLn $ ""
