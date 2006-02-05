@@ -20,7 +20,7 @@ testConst fn cnst gcc = system cmdline
   where cmdline = "echo '#include " ++ 
                   fn ++
                   "\nstatic int a = " ++
-                  cnst ++ ";' | " ++ gcc ++ " -pipe -x c -q -fsyntax-only - 2>/dev/null"
+                  cnst ++ ";' | " ++ gcc ++ " -pipe -x c -fsyntax-only - 2>/dev/null"
 
 -- Based on the include file name availability, produce either the file / module names
 -- themselves or placeholders for further sed'ing.

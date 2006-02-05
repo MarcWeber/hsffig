@@ -2,5 +2,5 @@ module Main where
 
 import HGmain
 
-main = hsffigMain "gcc" []
+main = hsffigMain "gcc" [] []
 

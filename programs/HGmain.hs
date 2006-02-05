@@ -6,11 +6,12 @@ import WriteHsc
 import HsfUtils
 import System.IO
 
-hsffigMain gcc incls = do
+hsffigMain gcc incls cppopt = do
   hFlush stdout
   s <- getContents
   let shs = scanHeader s
-      gcccmd = intlv (gcc : map ("-I " ++) incls) " "
+      opts = (map ("-I " ++) incls) ++ cppopt
+      gcccmd = intlv (gcc : opts) " "
   case (procHeader shs) of
     Left  y -> error ("Parser error: " ++ (show y))
     Right x -> (do let filename = getHeaderFileName shs

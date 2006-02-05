@@ -104,7 +104,6 @@ data OptInfo = OptInfo {
   cppOpts :: [String],
   pkgName :: String,
   pkgVersion :: String,
-  pkgInclude :: String,
   useNewHooks :: Bool,
   beVerbose :: Bool,
   mkfOnly :: Bool,
@@ -167,7 +166,6 @@ defaultOptInfo =
                  `ap` return []
                  `ap` return ""
                  `ap` return dfVn
-                 `ap` return ""
                  `ap` return False
                  `ap` return False
                  `ap` return False
@@ -194,8 +192,7 @@ updOptInfo oi (IncPath s) = oi {inclDirs = s : (inclDirs oi)}
 updOptInfo oi (LibPath s) = oi {libDirs = s : (libDirs oi)}
 updOptInfo oi (LibFile s) = oi {libFiles = s : (libFiles oi)}
 updOptInfo oi (CppOpt  s) = oi {cppOpts  = s : (cppOpts  oi)}
-updOptInfo oi (PkgName s) = oi {pkgName = (map toUpper s), 
-                                pkgInclude = "hs_" ++ (map toLower s) `joinFileExt` "h"}
+updOptInfo oi (PkgName s) = oi {pkgName = (map toUpper s)} 
 updOptInfo oi (PkgVn   s) = oi {pkgVersion = showVersion $ strVersion s}
 updOptInfo oi _           = oi
 
@@ -219,13 +216,12 @@ updOptions (op, nop) oi = (upd2 op) (oi {inclFiles = nop}) where
 guessPkgName :: OptInfo -> OptInfo
 
 guessPkgName oi@(OptInfo {inclFiles = []}) = oi
-guessPkgName oi = oi {pkgName = pkg, pkgInclude = "hs_" ++ incl1} where
-  incl1 = if pkgName oi /= "" 
-    then pkgInclude oi
-    else (snd . splitFileName . head . inclFiles) oi
+guessPkgName oi = oi {pkgName = pkg} where
   pkg = if pkgName oi /= ""
     then pkgName oi
-    else finalizeModuleName (Just $ (fst . splitFileExt) incl1)
+    else finalizeModuleName $ Just $ 
+                              (fst . splitFileExt) $ 
+                              (snd . splitFileName . head . inclFiles) oi
   
 
 -- Borrowed from Cabal: find a file along search path.
@@ -305,6 +301,7 @@ main = do
   let minusI = map ("-I" ++) (reverse $ inclDirs dopt)
       minusL = map ("-L" ++) (reverse $ libDirs dopt)
       minusD = reverse $ cppOpts dopt
+      incFile = ("hs_" ++ map toLower (pkgName dopt)) `joinFileExt` "h"
       fileBase = "HS_" ++ pkgName dopt ++ "_H"
       hscFile = fileBase `joinFileExt` "hsc"
       hsuFile = fileBase `joinFileExt` "hs_unsplit"
@@ -325,7 +322,7 @@ main = do
     mapM putStrLn exfail 
     exitWith (ExitFailure 1)
   infoMsgLn (beVerbose dopt) "Creating the package header file..."
-  h <- openFile (pkgInclude dopt) WriteMode
+  h <- openFile incFile WriteMode
   hPutStrLn h "/* File is generated automatically: do not edit */"
   mapM (\s -> hPutStrLn h $ "#include \"" ++ s ++ "\"") (inclFiles dopt)
   hClose h
@@ -337,13 +334,13 @@ main = do
                           redirFd fd2 (-1) $
                           redirFd hscfd 1 $
                           hsffigMain (fromJust $ gccPath dopt)
-                                     (inclDirs dopt)
+                                     (inclDirs dopt) minusD
   gccpid <- forkProcess $ redirFd fd2 1 $
                           executeFile (fromJust $ gccPath dopt)
                                       False
                                       (["-E", "-dD"] ++
                                        minusI ++ minusD ++
-                                       [pkgInclude dopt])
+                                       [incFile])
                                       Nothing
   closeFd hscfd
   closeFd fd1
