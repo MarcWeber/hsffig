@@ -3,6 +3,9 @@
 module Main where
 
 import Text.ParserCombinators.ReadP
+import Distribution.Simple.Configure
+import Distribution.Compiler
+import qualified Distribution.Package as DP
 import System.Console.GetOpt
 import System.Environment
 import System.FilePath
@@ -107,7 +110,8 @@ data OptInfo = OptInfo {
   useNewHooks :: Bool,
   beVerbose :: Bool,
   mkfOnly :: Bool,
-  hdrOnly :: Bool
+  hdrOnly :: Bool,
+  showVn :: Bool
 } deriving (Show)
 
 -- Convert a version string into a Version.
@@ -170,6 +174,7 @@ defaultOptInfo =
                  `ap` return False
                  `ap` return False
                  `ap` return False
+                 `ap` return False
 
 
 -- Update the OptInfo record from a parsed option
@@ -194,6 +199,7 @@ updOptInfo oi (LibFile s) = oi {libFiles = s : (libFiles oi)}
 updOptInfo oi (CppOpt  s) = oi {cppOpts  = s : (cppOpts  oi)}
 updOptInfo oi (PkgName s) = oi {pkgName = (map toUpper s)} 
 updOptInfo oi (PkgVn   s) = oi {pkgVersion = showVersion $ strVersion s}
+updOptInfo oi ShowVn      = oi {showVn = True}
 updOptInfo oi _           = oi
 
 -- Update the default options from the options parse result.
@@ -295,9 +301,26 @@ xProgs = ["echo", "rm", "find", "grep", "mkdir", "touch", "true", "cp", "mv", "l
 
 main = do
   opts <- getArgs >>= parseOpt
+  case opts of
+    ([], []) -> exitWith ExitSuccess
+    (_, []) -> do infoMsgLn True "No header files provided"
+                  exitWith (ExitFailure 10)
+    other -> do return ()
   dopt <- defaultOptInfo >>= (return . (guessPkgName . updOptions opts))
-  putStrLn $ show opts
-  putStrLn $ show dopt
+  when (showVn dopt) $ do
+    let nverb = if (beVerbose dopt) then 5 else 0
+    comp <- configCompiler (Just GHC) (ghcPath dopt) Nothing 0
+    pkgs <- getInstalledPackages comp False nverb
+    let thispkg = 
+          filter (\p -> map toUpper (DP.pkgName (p :: DP.PackageIdentifier)) == "HSFFIG") pkgs
+    if (length thispkg == 0) 
+      then do
+        infoMsgLn True "Package HSFFIG is not installed: cannot determine my version"
+        exitWith (ExitFailure 9)
+      else do
+        pgm <- getProgName
+        infoMsgLn True $ pgm ++ " version " ++ (showVersion $ DP.pkgVersion $ head thispkg)
+        exitWith ExitSuccess
   let minusI = map ("-I" ++) (reverse $ inclDirs dopt)
       minusL = map ("-L" ++) (reverse $ libDirs dopt)
       minusD = reverse $ cppOpts dopt
