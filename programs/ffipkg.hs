@@ -74,10 +74,15 @@ pkgOpt = [
     ("hsc2hs", Hsc2hs)
     ]
 
+-- A function to describe a "path-to-a-program" option uniformly.
+
 pgmOpt (pgm, cons) = Option [] 
                             ["with-" ++ pgm] 
                             (ReqArg cons pgm) 
                             ("path to " ++ pgm)
+
+-- Parse the command line options. If nothing on the command line
+-- then just print the help message.
 
 parseOpt argv = 
   case getOpt Permute pkgOpt argv of
@@ -300,20 +305,20 @@ xProgs = ["echo", "rm", "find", "grep", "mkdir", "touch", "true", "cp", "mv", "l
 -- The Main Program.
 
 main = do
+
+-- Obtain command line parameters. If -V (show version) is specified,
+-- then query Cabal for all packages installed, find ourselves,
+-- retrieve the version number.
+
   opts <- getArgs >>= parseOpt
-  case opts of
-    ([], []) -> exitWith ExitSuccess
-    (_, []) -> do infoMsgLn True "No header files provided"
-                  exitWith (ExitFailure 10)
-    other -> do return ()
   dopt <- defaultOptInfo >>= (return . (guessPkgName . updOptions opts))
   when (showVn dopt) $ do
     let nverb = if (beVerbose dopt) then 5 else 0
     comp <- configCompiler (Just GHC) (ghcPath dopt) Nothing 0
     pkgs <- getInstalledPackages comp False nverb
-    let thispkg = 
+    let thispkg =
           filter (\p -> map toUpper (DP.pkgName (p :: DP.PackageIdentifier)) == "HSFFIG") pkgs
-    if (length thispkg == 0) 
+    if (length thispkg == 0)
       then do
         infoMsgLn True "Package HSFFIG is not installed: cannot determine my version"
         exitWith (ExitFailure 9)
@@ -321,15 +326,60 @@ main = do
         pgm <- getProgName
         infoMsgLn True $ pgm ++ " version " ++ (showVersion $ DP.pkgVersion $ head thispkg)
         exitWith ExitSuccess
+
+-- If there are no header files (non-option parameters) specified, terminate.
+
+  case opts of
+    ([], []) -> exitWith ExitSuccess
+    (_, []) ->  do infoMsgLn True "No header files provided"
+                   exitWith (ExitFailure 10)
+    other -> do return ()
+
+-- Define some frequently used functions.
+
+-- All -I options (include directories) from the command line. 
+-- Reverse is necessary because options were taken from 
+-- the command line and included into a list in inverse order.
+
   let minusI = map ("-I" ++) (reverse $ inclDirs dopt)
+
+-- All -L options (librray directories). Similarly, requires reverse.
+
       minusL = map ("-L" ++) (reverse $ libDirs dopt)
+
+-- All other options to be passed to the C preprocessor/compiler.
+-- May be anything, but most frequently will be used for "-DX=Y"
+-- constructs.
+
       minusD = reverse $ cppOpts dopt
+
+-- Name of the include file to be converted to hsc.
+
       incFile = ("hs_" ++ map toLower (pkgName dopt)) `joinFileExt` "h"
+
+-- Base part of all package-dependent file names.
+
       fileBase = "HS_" ++ pkgName dopt ++ "_H"
+
+-- Name of the hsc file after hsffig.
+
       hscFile = fileBase `joinFileExt` "hsc"
+
+-- Name of the Haskell file after hsc2hs.
+
       hsuFile = fileBase `joinFileExt` "hs_unsplit"
+
+-- Name of the package library file.
+
       libFile = "lib" ++ (fileBase `joinFileExt` "a")
+
+-- Name of the Cabal package desctiption file generated at the end.
+
       cabalFile = (pkgName dopt) `joinFileExt` "cabal"
+
+-- Check whether the programs supplied on the command line (if any)
+-- exist and have executable attribute.
+
   infoMsgLn (beVerbose dopt) "Checking existence of the programs supplied..."
   excs <- mapM (chkExecVerb $ beVerbose dopt) [("make",    makePath dopt), 
                                                ("awk",     awkPath dopt),
@@ -337,19 +387,34 @@ main = do
                                                ("gcc",     gccPath dopt),
                                                ("ghc",     ghcPath dopt),
                                                ("hsc2hs",  hsc2hsPath dopt)]
+
+-- Same for the "extra" programs needed by Makefile.
+
   infoMsgLn (beVerbose dopt) "Checking existence of the programs needed by Makefile..."
   progs <- mapM (findExecVerb $ beVerbose dopt) xProgs
+
+-- See which programs were not found/were not executable. Print the list of programs.
+
   let exfail = [s | (s, b) <- excs, not b] ++ [s | (s, m) <- progs, m == Nothing]
   when ((length exfail) > 0) $ do
     putStrLn $ "Failed: The following programs cannot execute:"
     mapM putStrLn exfail 
     exitWith (ExitFailure 1)
+
+-- Place names of all the include files specified on the command line
+-- into the package include file.
+
   infoMsgLn (beVerbose dopt) "Creating the package header file..."
   h <- openFile incFile WriteMode
   hPutStrLn h "/* File is generated automatically: do not edit */"
   mapM (\s -> hPutStrLn h $ "#include \"" ++ s ++ "\"") (inclFiles dopt)
   hClose h
   when (hdrOnly dopt) $ exitWith (ExitSuccess)
+
+-- Run the pipeline consisting of the C preprocessor and the hsffig
+-- main program. Pass all preprocessor options (including include directories)
+-- to the preprocessor.
+
   infoMsgLn (beVerbose dopt) "Running gcc and producing the hsc file..."
   (fd1, fd2) <- createPipe
   hscfd <- fileToFd hscFile
@@ -377,6 +442,9 @@ main = do
   when ((length hscfail) > 0) $ do
     mapM (\s -> putStrLn $ "Failed: abnormal termination " ++ s) hscfail
     exitWith (ExitFailure 2)
+
+-- Run hsc2hs.
+
   infoMsgLn (beVerbose dopt) "Running hsc2hs..."
   h2hpid <- forkProcess $ executeFile (fromJust $ hsc2hsPath dopt)
                                       False
@@ -388,12 +456,20 @@ main = do
   when (h2hrt /= Just (Exited ExitSuccess)) $ do
     putStrLn "Failed: abnormal termination of hsc2hs"
     exitWith (ExitFailure 3)
+
+-- This utility always splits source files as the size of the hsc file
+-- is impossible to predict.
+
   infoMsgLn (beVerbose dopt) "Running splitter..."
   modlist <- splitterMain [hsuFile]
   when ((length modlist) == 0) $ do
     putStrLn "Failed: splitter yielded empty list of modules"
     exitWith (ExitFailure 4)
   infoMsgLn (beVerbose dopt) $ "Splitter yielded " ++ show (length modlist) ++ " modules"
+
+-- Create Makefile. Most part of it is in the Makefile template, so here
+-- only paths to the programs needed by Makefile are hardcoded in the Makefile.
+
   infoMsgLn (beVerbose dopt) "Creating Makefile..."
   mkffd <- fileToFd "Makefile"
   mkfpid <- forkProcess $ redirFd mkffd 1 $ do
@@ -415,6 +491,10 @@ main = do
   when (mkfrt /= Just (Exited ExitSuccess)) $ do
     putStrLn "Failed: abnormal termination while writing Makefile"
     exitWith (ExitFailure 5)
+
+-- Create the Cabal package description file. A really minimal subset of fields
+-- is needed here. List of exposed and hidden modules is obtained from the splitter.
+
   infoMsgLn (beVerbose dopt) $ "Creating " ++ cabalFile ++ "..."
   cabfd <- fileToFd cabalFile
   cabpid <- forkProcess $ redirFd cabfd 1 $ do
@@ -434,6 +514,11 @@ main = do
   when (cabrt /= Just (Exited ExitSuccess)) $ do
     putStrLn $ "Failed: abnormal termination while writing " ++ cabalFile
     exitWith (ExitFailure 6)
+
+-- Create the Setup.hs file. It is mostly taken from the template. Choice
+-- of the template is based on the -n command line option (whether newer
+-- or older userHooks interface is used).
+
   infoMsgLn (beVerbose dopt) "Creating Setup.hs"
   setfd <- fileToFd "Setup.hs"
   setpid <- forkProcess $ redirFd setfd 1 $ do
@@ -445,5 +530,9 @@ main = do
   when (setrt /= Just (Exited ExitSuccess)) $ do
     putStrLn $ "Failed: abnormal termination while writing Setup.hs"
     exitWith (ExitFailure 7)
+
+-- Finally, the utility is done. Next, the user runs `runghc Setup.hs'
+-- as usual.
+
   exitWith ExitSuccess
 
