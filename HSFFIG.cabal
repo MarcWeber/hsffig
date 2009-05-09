@@ -17,8 +17,7 @@ Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes
 		functions and variables.
 		Cabal >= 1.1.3 is needed as one coming with GHC 6.4.1 does not install
 		executables properly.
-Tested-with:	GHC==6.4.1
-Build-depends:	base, parsec, Cabal>=1.1.3, filepath, unix, 
+Build-depends:	base >=4 , parsec < 3 , Cabal>=1.5, filepath, unix, 
                 process, containers, array, directory
 Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses

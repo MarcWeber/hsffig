@@ -505,12 +505,26 @@ instance Show StructDeclarator where
     smbc (Just c) = ":" ++ (show c)
 
 struct_declarator = 
-  try (do d <- maybeOpt declarator
+  try (do d <- anondecl -- maybeOpt declarator
           c <- maybeOpt (do tkOp ":"
                             ce <- constant_expression
                             return ce)
           return (StructDeclarator d c))
   <?> "struct_declarator"
+
+-- If there is an empty declarator (like an anonymous union), generate
+-- a uniquely named declarator (id starting with "_@_"). Later, such
+-- identifiers will be detected and no imports will be produced for them.
+-- This way works around unnamed unions e. g used in __pthread_mutex_s.
+
+anondecl = do
+  mbd <- maybeOpt declarator
+  case mbd of
+    Just d -> return mbd
+    Nothing -> do
+      ct <- getState >>= getucnt
+      let anid = "_@_" ++ show ct
+      return $ Just $ Declarator [] (Left anid) []
 
 -- enum-specifier: "enum" (identifier | identifier? "{" enumerator% "}")
 
@@ -585,6 +599,7 @@ data CPI = CPICon (Maybe ConstExpr)
 instance Show Declarator where
   show (Declarator ps esd cpis) = sps ++ (sesd esd) ++ (scpi cpis) where
     sps = take (length ps) ['*', '*' ..]
+    sesd (Left ('_':'@':'_':_)) = ""
     sesd (Left s) = s
     sesd (Right d) = "(" ++ (show d) ++ ")"
     scpi [] = ""

@@ -71,6 +71,7 @@ tokens :-
 "volatile"		{ tok (\p s -> TKW s p) }
 "while"			{ tok (\p s -> TKW s p) }
 "__attribute__"		{ tok (\p s -> TKW s p) }
+"__extension__"         ;
 "#define" $white+ .*	{ tok (\p s -> TKDEF s p) }
 
 $L [$L $D]*		{ tok (\p s -> TKID s p) }

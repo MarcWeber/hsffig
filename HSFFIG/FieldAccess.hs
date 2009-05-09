@@ -5,7 +5,7 @@
 -- to a C structure type will be an instance of this class.
 --
 
-{-# OPTIONS -fglasgow-exts -ffi #-}
+{-# OPTIONS -fglasgow-exts -XForeignFunctionInterface #-}
 
 module HSFFIG.FieldAccess (
   FieldAccess (..)

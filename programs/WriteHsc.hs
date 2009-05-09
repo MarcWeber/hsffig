@@ -230,8 +230,11 @@ collectfields dss = concat $ map collectfields' dss where
   collectfields' (DictStruct su ss) = concat $ map collectfields'' ss where
     collectfields'' (StructDecl _ sds) = map sd2fld sds where
 
+-- Anonymous identifiers (starting with "_@_") will not be processed.
+
 writefields flds fn =
   mapM fldata flds where
+    fldata ('_':'@':'_':_) = return ()
     fldata fld = do putStrLn $ "data V_" ++ fld ++ " = V_" ++ fld
                     putStrLn $ "data X_" ++ fld ++ " = X_" ++ fld
                     putStrLn $ "data D_" ++ fld ++ " = D_" ++ fld
@@ -490,6 +493,8 @@ bitfield si fi = do
   putStrLn $ "  ((" ++ (trueName si) ++ " *)s) -> " ++ (fldName fi) ++ " = v;"
   putStrLn $ "}"
 
+ptrfield _ ('_':'@':'_':_) = return ()
+
 ptrfield si fld = do
   putStrLn $ 
     "  z --> V_" ++ fld ++ " = return $ (#ptr __quote__(" ++ (trueName si) ++ "), " ++ fld ++ ") z"
@@ -562,6 +567,7 @@ simplifystructdecl (StructDecl dss [sd]) = simplifydecl (fst isd) (snd isd) wher
   initdecl dss (StructDeclarator (Just d) Nothing) = (dss, InitDeclarator d Nothing)
   initdecl _ (StructDeclarator (Just d) (Just c)) = 
     ((DeclSpecType (TypeSpecPrim "$BF$")):dss, InitDeclarator d Nothing)
+
 
 ---------------------------------------------------------------------------------------
 
