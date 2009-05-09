@@ -3,6 +3,7 @@
 module Main where
 
 import Text.ParserCombinators.ReadP
+import Distribution.Simple.BuildPaths
 import Distribution.Simple.Configure
 import Distribution.Compiler
 import qualified Distribution.Package as DP
@@ -231,7 +232,7 @@ guessPkgName oi = oi {pkgName = pkg} where
   pkg = if pkgName oi /= ""
     then pkgName oi
     else finalizeModuleName $ Just $ 
-                              (fst . splitFileExt) $ 
+                              (fst . splitExtensions) $ 
                               (snd . splitFileName . head . inclFiles) oi
   
 
@@ -241,12 +242,12 @@ guessPkgName oi = oi {pkgName = pkg} where
 findFileAlong :: String -> String -> String -> IO (Maybe FilePath)
 
 findFileAlong path file ext = do
-  search (parseSearchPath path)
+  search (splitSearchPath path)
   where
     search :: [FilePath] -> IO (Maybe FilePath)
     search [] = return Nothing
     search (d:ds) = do
-       let path = d `joinFileName` file `joinFileExt` ext
+       let path = d </> file <.> ext
        b <- doesFileExist path
        if b then return (Just path)
              else search ds
@@ -355,7 +356,7 @@ main = do
 
 -- Name of the include file to be converted to hsc.
 
-      incFile = ("hs_" ++ map toLower (pkgName dopt)) `joinFileExt` "h"
+      incFile = ("hs_" ++ map toLower (pkgName dopt)) <.> "h"
 
 -- Base part of all package-dependent file names.
 
@@ -363,19 +364,19 @@ main = do
 
 -- Name of the hsc file after hsffig.
 
-      hscFile = fileBase `joinFileExt` "hsc"
+      hscFile = fileBase <.> "hsc"
 
 -- Name of the Haskell file after hsc2hs.
 
-      hsuFile = fileBase `joinFileExt` "hs_unsplit"
+      hsuFile = fileBase <.> "hs_unsplit"
 
 -- Name of the package library file.
 
-      libFile = "lib" ++ (fileBase `joinFileExt` "a")
+      libFile = "lib" ++ (fileBase <.> "a")
 
 -- Name of the Cabal package desctiption file generated at the end.
 
-      cabalFile = (pkgName dopt) `joinFileExt` "cabal"
+      cabalFile = (pkgName dopt) <.> "cabal"
 
 -- Check whether the programs supplied on the command line (if any)
 -- exist and have executable attribute.

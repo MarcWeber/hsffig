@@ -35,7 +35,7 @@ fldmodule = "HSFFIG.FieldAccess"
 -- and replacing dots with underscores (so most likely module name will end
 -- with _H).
 
-ghcopts = "{-# OPTIONS -fglasgow-exts -ffi #-}"
+ghcopts = "{-# OPTIONS -fglasgow-exts -XForeignFunctionInterface #-}"
 
 writeModHdr mfn = do let fmfn = finalizeModuleName mfn
                      writeTemplate
@@ -119,6 +119,10 @@ writeConstAccess tus gcc (Just fn) =
      mapM (oneconst fn gcc) cnsts 
      putStrLn $ "\n" ++ splitEnd ++ "\n"
      return ()
+
+-- No import for #define alloca.
+
+oneconst _ _ "alloca" = return ()
 
 oneconst fn gcc cnst = 
   do rc <- testConst (finalizeFileName (Just fn)) cnst gcc
@@ -1049,7 +1053,10 @@ excludeimport sym isv drs = do
   putStrLn   "--"
                   
 
--- Write an import statement for a function.
+-- Write an import statement for a function. The `alloca' function if not really a function,
+-- so import is not written for it.
+
+statimport _ "alloca" _ = return ()
 
 statimport ifn sym tsg = do
   putStrLn $ "foreign import ccall \"static " ++ ifn ++ " " ++ sym ++ "\""

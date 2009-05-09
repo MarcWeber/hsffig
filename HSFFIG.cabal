@@ -18,15 +18,18 @@ Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes
 		Cabal >= 1.1.3 is needed as one coming with GHC 6.4.1 does not install
 		executables properly.
 Tested-with:	GHC==6.4.1
-Build-depends:	base, parsec, hxt, Cabal>=1.1.3, FilePath, unix
+Build-depends:	base, parsec, Cabal>=1.1.3, filepath, unix, 
+                process, containers, array, directory
 Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses
+Build-type:     Simple
 
-Executable:	ffipkg
-Main-is:	ffipkg.hs
-Hs-source-dirs:	programs
-Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils,
-                HGmain, SPmain, Makefile Setupfile SetupfileNew
+-- Executable:	ffipkg
+-- Main-is:	ffipkg.hs
+-- Hs-source-dirs:	programs
+-- Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, 
+--                      WriteHsc, Template, HsfUtils,
+--                HGmain, SPmain, Makefile Setupfile SetupfileNew
 
 Executable:	hsffig
 Main-is:	hsffig.hs
@@ -44,8 +47,4 @@ Main-is:	splitter.hs
 Hs-source-dirs:	programs
 Other-modules:	SPmain, SplitBounds
 
-Executable:     xmldump
-Main-is:        xmldump.hs
-Hs-source-dirs:  programs
-Other-modules:  C_Lexer, ProcHdr, TokenOps, C_BNF, WriteXml, SplitBounds, WriteHsc, Template, HsfUtils
 
