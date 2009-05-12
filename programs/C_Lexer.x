@@ -72,7 +72,10 @@ tokens :-
 "while"			{ tok (\p s -> TKW s p) }
 "__attribute__"		{ tok (\p s -> TKW s p) }
 "__extension__"         ;
+"__restrict"            ;
+"__restrict__"          ;
 "#define" $white+ .*	{ tok (\p s -> TKDEF s p) }
+"#undef" $white+ .*     ;
 
 $L [$L $D]*		{ tok (\p s -> TKID s p) }
 

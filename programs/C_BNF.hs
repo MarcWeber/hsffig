@@ -82,14 +82,35 @@ bnfParser = do tu <- translation_unit
 -- in the same map where type aliases are kept.
 
 recordstruct s i sds = do
+  asds <- mapM anonstrdecl sds
   let recname = s ++ "@" ++ i
-      dcs = DictStruct s sds
+      dcs = DictStruct s asds
   case sds of
     [] -> do st <- getState
              case (lookmap st recname) of
                Nothing -> updateState (afm recname dcs)
                (Just _) -> return ()
     other -> updateState (afm recname dcs)
+
+-- When saving structure information, make sure all structures that are DECLARED
+-- inside are marked as anonymous so they do not clash when defining #peeks and #pokes.
+
+
+
+anonstrdecl (StructDecl dss sds) = do
+  let anondss d@(DeclSpecType (TypeSpecStruct (StructSpec su sn ds))) =
+        case ds of
+          [] -> return d
+          _ -> do
+            n <- getState >>= getucnt
+            let sn' = case isDigit (head sn) of
+                  True -> sn
+                  False -> show n
+            ds' <- mapM anonstrdecl ds
+            return $ DeclSpecType (TypeSpecStruct (StructSpec su sn' ds'))
+      anondss z = return z
+  dss' <- mapM anondss dss
+  return $ StructDecl dss' sds
 
 -- Record an enum. Enum information is saved
 -- in the same map where type aliases are kept.

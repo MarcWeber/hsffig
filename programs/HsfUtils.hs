@@ -41,4 +41,10 @@ intlv [] _ = ""
 intlv [x] _ = x
 intlv (rt:rts) s = rt ++ s ++ (intlv rts s)
 
+-- Check if a structure/union name relate to anonymous structure/union
+
+isAnon ('s':'t':'r':'u':'c':'t':'@':s:_) = isDigit s
+isAnon ('u':'n':'i':'o':'n':'@':s:_) = isDigit s
+isAnon _  = False
+
 

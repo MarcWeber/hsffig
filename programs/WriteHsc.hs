@@ -274,16 +274,12 @@ writeStructures tus tymap fn =
 -- Fill out a strinfo data structure.
 
 mkStrInfo strname strdecl =
-  let isanon ('s':'t':'r':'u':'c':'t':'@':s:_) = isDigit s
-      isanon ('u':'n':'i':'o':'n':'@':s:_) = isDigit s
-      isanon _  = False
-  in  StructInfo {
-        strName = strname,
-        trueName = if (isanon strname) then (show strdecl) else (truename strname),
-        convName = convname strname,
-        cSyntax = (show strdecl)
-      }
-
+  StructInfo {
+    strName = strname,
+    trueName = if (isAnon strname) then (show strdecl) else (truename strname),
+    convName = convname strname,
+    cSyntax = show strdecl
+  }
 
 -- Fill out a fldinfo data structure.
 
@@ -412,6 +408,8 @@ truename strname
 -- function (in Haskell sense) will be returned.
 -- For anonymous structures, their C syntax (deparsed) will be used
 -- to form the #peek construction.
+
+structinstance fn strinfo fldinfo | take 3 (fldName fldinfo) == "_@_" = return ()
 
 structinstance fn strinfo fldinfo = do
   let icid = (internId fldinfo) ++ (convName strinfo)
