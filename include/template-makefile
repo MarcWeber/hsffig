@@ -45,7 +45,7 @@ $(LOC)/libHS$(PKG)-$(VER).a : $(BASE).hsc
 %.hi %.o : %.hs
 	-$(MKDIR) $*_split 2>/dev/null
 	$(ECHO) "int dummy_$*_stub_entry;" | $(GCC) -x c -c -o $*.o -
-	$(GHC) -split-objs -c -package HSFFIG $<
+	$(GHC) -package-name $(PKG)-$(VER) -split-objs -c -package HSFFIG $<
 	$(TOUCH) $*.o $*.hi
 
 %.hi : %.o
