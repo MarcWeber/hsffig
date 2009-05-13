@@ -23,12 +23,12 @@ Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses
 Build-type:     Simple
 
--- Executable:	ffipkg
--- Main-is:	ffipkg.hs
--- Hs-source-dirs:	programs
--- Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, 
---                      WriteHsc, Template, HsfUtils,
---                HGmain, SPmain, Makefile Setupfile SetupfileNew
+Executable:	ffipkg
+Main-is:	ffipkg.hs
+Hs-source-dirs:	programs
+Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, 
+                WriteHsc, Template, HsfUtils,
+                HGmain, SPmain, Makefile Setupfile SetupfileNew
 
 Executable:	hsffig
 Main-is:	hsffig.hs

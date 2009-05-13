@@ -6,7 +6,7 @@ import Text.ParserCombinators.ReadP
 import Distribution.Simple.BuildPaths
 import Distribution.Simple.Configure
 import Distribution.Compiler
-import qualified Distribution.Package as DP
+import qualified Paths_HSFFIG as P
 import System.Console.GetOpt
 import System.Environment
 import System.FilePath
@@ -56,7 +56,6 @@ pkgOpt :: [OptDescr PkgArg]
 
 pkgOpt = [
   Option ['v']  ["verbose"]         (NoArg Verbose)      "provide verbose output",
-  Option ['n']  ["new-hooks"]       (NoArg NewHooks)     "use newer userHooks interface",
   Option ['i']  ["header"]          (NoArg InclFile)     "stop after writing package include file",
   Option ['?','h'] ["help"]         (NoArg HelpMsg)      "print this help message",
   Option ['I']  []                  (ReqArg IncPath "")  "include files location (may be multiple)",
@@ -176,7 +175,7 @@ defaultOptInfo =
                  `ap` return []
                  `ap` return ""
                  `ap` return dfVn
-                 `ap` return False
+                 `ap` return True   -- always use new hooks
                  `ap` return False
                  `ap` return False
                  `ap` return False
@@ -190,7 +189,6 @@ defaultOptInfo =
 
 updOptInfo :: OptInfo -> PkgArg -> OptInfo  
 
-updOptInfo oi NewHooks    = oi {useNewHooks = True}
 updOptInfo oi Verbose     = oi {beVerbose = True}
 updOptInfo oi InclFile    = oi {hdrOnly = True}
 updOptInfo oi (Make s)    = oi {makePath = Just s}
@@ -314,19 +312,9 @@ main = do
   opts <- getArgs >>= parseOpt
   dopt <- defaultOptInfo >>= (return . (guessPkgName . updOptions opts))
   when (showVn dopt) $ do
-    let nverb = if (beVerbose dopt) then 5 else 0
-    comp <- configCompiler (Just GHC) (ghcPath dopt) Nothing 0
-    pkgs <- getInstalledPackages comp False nverb
-    let thispkg =
-          filter (\p -> map toUpper (DP.pkgName (p :: DP.PackageIdentifier)) == "HSFFIG") pkgs
-    if (length thispkg == 0)
-      then do
-        infoMsgLn True "Package HSFFIG is not installed: cannot determine my version"
-        exitWith (ExitFailure 9)
-      else do
-        pgm <- getProgName
-        infoMsgLn True $ pgm ++ " version " ++ (showVersion $ DP.pkgVersion $ head thispkg)
-        exitWith ExitSuccess
+    pgm <- getProgName
+    infoMsgLn True $ pgm ++ " version " ++ showVersion P.version
+    exitWith ExitSuccess
 
 -- If there are no header files (non-option parameters) specified, terminate.
 
@@ -502,6 +490,7 @@ main = do
     putStrLn $ "-- " ++ cabalFile ++ " is generated automatically: do not edit"
     putStrLn $ "Name: " ++ pkgName dopt
     putStrLn $ "Version: " ++ pkgVersion dopt
+    putStrLn $ "Build-type: Custom"
     putStrLn $ "Build-depends: base, HSFFIG"
     putStrLn $ "Exposed-modules: " ++ head modlist
     putStrLn $ "Other-modules:\n" ++ intlv (map ("  " ++) (drop 1 modlist)) ",\n"
@@ -524,7 +513,7 @@ main = do
   setfd <- fileToFd "Setup.hs"
   setpid <- forkProcess $ redirFd setfd 1 $ do
     putStrLn $ "-- Setup.hs is generated automatically: do not edit"
-    if (useNewHooks dopt) then writeSetupfileNew else writeSetupfile
+    writeSetupfileNew
     return ()
   closeFd setfd
   setrt <- getProcessStatus True False setpid
