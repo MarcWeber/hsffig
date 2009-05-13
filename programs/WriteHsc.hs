@@ -242,10 +242,13 @@ writefields flds fn =
 writeStructures tus tymap fn = 
   do let structs = Map.filterWithKey structonly tymap
          typedefs = Map.toList $ Map.filterWithKey tdefonly tymap
+         typeeqs = Map.toList $ Map.filterWithKey tteqonly tymap
          structonly _ (DictStruct _ _) = True
          structonly _ _ = False
          tdefonly _ (DictDecl _) = True
          tdefonly _ _ = False
+         tteqonly _ (DictTypeEq _) = True
+         tteqonly _ _ = False
          allfields = nub $ collectfields (Map.elems structs)
          fmfns = (finalizeModuleName fn) ++ "_S"
          strpairs = Map.toList structs
@@ -261,7 +264,7 @@ writeStructures tus tymap fn =
      putStrLn ""
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "_t\n"
      writeSplitHeader [fmfns ++ "_n"] $ fmfns ++ "_t"
-     mapM (tdefalias tymap) typedefs
+     mapM (tdefalias tymap) (typedefs ++ typeeqs)
      putStrLn $ "\n" ++ splitEnd ++ "\n"
      putStrLn ""
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfns ++ "_n\n"
@@ -547,7 +550,7 @@ structnewtype strname = do
 
 -- Write type declarations for all type aliases.
 
-tdefalias tymap (tal,DictDecl (Declaration dss [id] _)) = do
+tdefalias tymap (tal, DictDecl (Declaration dss [id] _)) = do
   let target = (ts2ts . 
                 (monadify "IO") . 
                 mapc2hs . 
@@ -557,6 +560,13 @@ tdefalias tymap (tal,DictDecl (Declaration dss [id] _)) = do
       polish ('@':s) = s
       polish z = z
   putStrLn $ "type T_" ++ tal ++ " = " ++ (polish target)
+
+-- Write type equivalencies created during fixing named-within-anonymous struct
+-- declarations.
+
+tdefalias tymap (tal, DictTypeEq trg) =
+  putStrLn $ "type " ++ tal ++ " = " ++ trg
+
 
 -- Similarly to Declaration, simplify a structure/union member declaration.
 

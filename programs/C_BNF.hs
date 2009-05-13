@@ -23,6 +23,7 @@ data DictElement = DictDecl  Declaration
                  | DictDef
                  | DictStruct String [StructDecl]
                  | DictEnum [Enumerator]
+                 | DictTypeEq String
                  | DictId Integer
 
 showsemi [] = ""
@@ -41,6 +42,7 @@ instance Show DictElement where
   show DictDef  = "/* DictDef */"
   show (DictStruct su sds) = su ++ " {" ++ (showsemi sds) ++ "}"
   show (DictEnum eds) = "enum {" ++ (showcomma eds) ++ "}"
+  show (DictTypeEq t) = t
   show (DictId n) = show n
 
 data PState = PState {
@@ -103,9 +105,15 @@ anonstrdecl (StructDecl dss sds) = do
           [] -> return d
           _ -> do
             n <- getState >>= getucnt
-            let sn' = case isDigit (head sn) of
-                  True -> sn
-                  False -> show n
+            sn' <- case isDigit (head sn) of
+              True -> return sn
+              False -> do
+                let newn = show n
+                    fstl = toUpper (head su)
+                    teqv = fstl : '_' : newn
+                    targ = fstl : '_' : sn
+                updateState (afm teqv (DictTypeEq targ))
+                return newn
             ds' <- mapM anonstrdecl ds
             return $ DeclSpecType (TypeSpecStruct (StructSpec su sn' ds'))
       anondss z = return z
@@ -439,7 +447,7 @@ data StructSpec = StructSpec String String [StructDecl]
 instance Show StructSpec where
   show (StructSpec s i sds) = s ++ " " ++ (showanon i) ++ (shownonempty sds)  where
     showanon x = case (isDigit $ head x) of
-                   True -> ""
+                   True -> "/* " ++ x ++ " */"
                    False -> x
     shownonempty [] = ""
     shownonempty z = "{" ++ (showsemi z) ++ "}"
