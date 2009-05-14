@@ -14,7 +14,7 @@ import Distribution.Simple.Configure
 import Distribution.Simple.LocalBuildInfo
 
 main :: IO ()
-main = defaultMainWithHooks defaultUserHooks {
+main = defaultMainWithHooks simpleUserHooks {
   buildHook = myBuildHook,
   preClean = disabledCmd,
   preSDist = disabledCmd,

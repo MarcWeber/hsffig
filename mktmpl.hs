@@ -13,7 +13,8 @@ main = do a <- getArgs
           let os = map (map ord) $ lines p
           putStrLn $ "module " ++ head a ++ " where"
           putStrLn $ "import Data.Char"
-          putStrLn $ "write" ++ head a ++ " = mapM putStrLn ["
+          putStrLn $ "import System.IO"
+          putStrLn $ "write" ++ head a ++ " = \\h -> mapM (hPutStrLn h) ["
           mapM (putStrLn . (\s -> "  map chr " ++ s ++ ",") . show) os
           putStrLn $ "  map chr [] ]"
 

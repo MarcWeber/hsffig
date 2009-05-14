@@ -460,66 +460,48 @@ main = do
 -- only paths to the programs needed by Makefile are hardcoded in the Makefile.
 
   infoMsgLn (beVerbose dopt) "Creating Makefile..."
-  mkffd <- fileToFd "Makefile"
-  mkfpid <- forkProcess $ redirFd mkffd 1 $ do
-    putStrLn $ "# Makefile is generated automatically: do not edit"
-    putStrLn $ "# This Makefile builds a library for the package " ++ pkgName dopt
-    putStrLn $ ""
-    putStrLn $ "AR = " ++ (fromJust $ arPath dopt)
-    putStrLn $ "AWK = " ++ (fromJust $ awkPath dopt)
-    putStrLn $ "MAKE = " ++ (fromJust $ makePath dopt)
-    putStrLn $ "GCC = " ++ (fromJust $ gccPath dopt) ++ " " ++ intlv minusI " " ++ 
+  mkffd <- openFile "Makefile" WriteMode
+  hPutStrLn mkffd $ "# Makefile is generated automatically: do not edit"
+  hPutStrLn mkffd $ "# This Makefile builds a library for the package " ++ pkgName dopt
+  hPutStrLn mkffd $ ""
+  hPutStrLn mkffd $ "AR = " ++ (fromJust $ arPath dopt)
+  hPutStrLn mkffd $ "AWK = " ++ (fromJust $ awkPath dopt)
+  hPutStrLn mkffd $ "MAKE = " ++ (fromJust $ makePath dopt)
+  hPutStrLn mkffd $ "GCC = " ++ (fromJust $ gccPath dopt) ++ " " ++ intlv minusI " " ++ 
                intlv minusD " "
-    putStrLn $ "GHC = " ++ (fromJust $ ghcPath dopt) ++ " " ++ intlv minusI " "
-    mapM (\(s, m) -> putStrLn $ (map toUpper s) ++ " = " ++ fromJust m) progs
-    putStrLn $ ""
-    writeMakefile
-    return ()
-  closeFd mkffd
-  mkfrt <- getProcessStatus True False mkfpid
-  when (mkfrt /= Just (Exited ExitSuccess)) $ do
-    putStrLn "Failed: abnormal termination while writing Makefile"
-    exitWith (ExitFailure 5)
+  hPutStrLn mkffd $ "GHC = " ++ (fromJust $ ghcPath dopt) ++ " " ++ intlv minusI " "
+  mapM (\(s, m) -> hPutStrLn mkffd $ (map toUpper s) ++ " = " ++ fromJust m) progs
+  hPutStrLn mkffd $ ""
+  writeMakefile mkffd
+  hClose mkffd
 
 -- Create the Cabal package description file. A really minimal subset of fields
 -- is needed here. List of exposed and hidden modules is obtained from the splitter.
 
   infoMsgLn (beVerbose dopt) $ "Creating " ++ cabalFile ++ "..."
-  cabfd <- fileToFd cabalFile
-  cabpid <- forkProcess $ redirFd cabfd 1 $ do
-    putStrLn $ "-- " ++ cabalFile ++ " is generated automatically: do not edit"
-    putStrLn $ "Name: " ++ pkgName dopt
-    putStrLn $ "Version: " ++ pkgVersion dopt
-    putStrLn $ "Build-type: Custom"
-    putStrLn $ "Build-depends: base, HSFFIG"
-    putStrLn $ "Exposed-modules: " ++ head modlist
-    putStrLn $ "Other-modules:\n" ++ intlv (map ("  " ++) (drop 1 modlist)) ",\n"
-    when (length (libDirs dopt) > 0) $ 
-      putStrLn $ "Extra-lib-dirs:\n" ++ intlv (map ("  " ++) (reverse (libDirs dopt))) ",\n"
-    when (length (libFiles dopt) > 0) $
-      putStrLn $ "Extra-libraries:\n" ++ intlv (map ("  " ++) (reverse ( libFiles dopt))) ",\n"
-    return ()
-  closeFd cabfd
-  cabrt <- getProcessStatus True False cabpid
-  when (cabrt /= Just (Exited ExitSuccess)) $ do
-    putStrLn $ "Failed: abnormal termination while writing " ++ cabalFile
-    exitWith (ExitFailure 6)
+  cabfd <- openFile cabalFile WriteMode
+  hPutStrLn cabfd $ "-- " ++ cabalFile ++ " is generated automatically: do not edit"
+  hPutStrLn cabfd $ "Name: " ++ pkgName dopt
+  hPutStrLn cabfd $ "Version: " ++ pkgVersion dopt
+  hPutStrLn cabfd $ "Build-type: Custom"
+  hPutStrLn cabfd $ "Build-depends: base, HSFFIG"
+  hPutStrLn cabfd $ "Exposed-modules: " ++ head modlist
+  hPutStrLn cabfd $ "Other-modules:\n" ++ intlv (map ("  " ++) (drop 1 modlist)) ",\n"
+  when (length (libDirs dopt) > 0) $ 
+    hPutStrLn cabfd $ "Extra-lib-dirs:\n" ++ intlv (map ("  " ++) (reverse (libDirs dopt))) ",\n"
+  when (length (libFiles dopt) > 0) $
+    hPutStrLn cabfd $ "Extra-libraries:\n" ++ intlv (map ("  " ++) (reverse ( libFiles dopt))) ",\n"
+  hClose cabfd
 
 -- Create the Setup.hs file. It is mostly taken from the template. Choice
 -- of the template is based on the -n command line option (whether newer
 -- or older userHooks interface is used).
 
   infoMsgLn (beVerbose dopt) "Creating Setup.hs"
-  setfd <- fileToFd "Setup.hs"
-  setpid <- forkProcess $ redirFd setfd 1 $ do
-    putStrLn $ "-- Setup.hs is generated automatically: do not edit"
-    writeSetupfileNew
-    return ()
-  closeFd setfd
-  setrt <- getProcessStatus True False setpid
-  when (setrt /= Just (Exited ExitSuccess)) $ do
-    putStrLn $ "Failed: abnormal termination while writing Setup.hs"
-    exitWith (ExitFailure 7)
+  setfd <- openFile "Setup.hs" WriteMode
+  hPutStrLn setfd $ "-- Setup.hs is generated automatically: do not edit"
+  writeSetupfileNew setfd
+  hClose setfd
 
 -- Finally, the utility is done. Next, the user runs `runghc Setup.hs'
 -- as usual.

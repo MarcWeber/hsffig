@@ -13,6 +13,7 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.List
 import Control.Monad
+import System.IO
 
 -- Name for the HSFFIG field access class, and module to import
 
@@ -38,7 +39,7 @@ fldmodule = "HSFFIG.FieldAccess"
 ghcopts = "{-# OPTIONS -fglasgow-exts -XForeignFunctionInterface #-}"
 
 writeModHdr mfn = do let fmfn = finalizeModuleName mfn
-                     writeTemplate
+                     writeTemplate stdout
                      putStrLn $ "#def void _dummy_force_" ++ fmfn ++ "_hsc_c (void) { }"
                      putStrLn $ ghcopts
                      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfn ++ "\n"
