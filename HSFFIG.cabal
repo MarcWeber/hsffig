@@ -7,16 +7,31 @@ Author:		Dimitry Golubovsky
 Maintainer:	golubovsky@gmail.com
 Stability:	stable
 Homepage:	http://hsffig.sourceforge.net
-Synopsis:	A tool which reads a C include file and generates FFI import declarations
-Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that takes a 
+Synopsis:	Generates FFI import declarations from C header files
+Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that parses a 
 		C library include file (.h) and generates Haskell Foreign Functions Interface 
 		import declarations for all functions, #define's (where possible), enumerations, 
 		and structures/unions (to access their members). It is assumed that the GNU C 
 		Compiler and Preprocessor are used. Auto-generated Haskell modules may be 
 		imported into an application to get access to the foreign library's 
 		functions and variables.
-		Cabal >= 1.1.3 is needed as one coming with GHC 6.4.1 does not install
-		executables properly.
+                .
+                The package provides a small library that programs using auto-generated
+                imports have to link to (specify HSFFIG as one of build-depends), and two 
+                executable programs:
+                .
+                  * hsffig: a filter program reading pre-processed include files 
+                from standard input, and producing one large .hsc file to be processed 
+                by @hsc2hs@, and possibly cut into pieces by @modsplit@. See
+                <http://www.haskell.org/haskellwiki/HSFFIG/Tutorial> for more information.
+                .
+                  * ffipkg: a wrapper over @hsffig@ which automates the process of
+                building a Cabal package out of C include files provided. See 
+                <http://www.haskell.org/haskellwiki/FFI_imports_packaging_utility> for
+                more information.
+                .
+                Please note that @hsffig@ and @ffipkg@ will likely not work properly
+                with C++ include files.
 Build-depends:	base >=4 , parsec < 3 , Cabal>=1.5, filepath, unix, 
                 process, containers, array, directory
 Exposed-modules: HSFFIG.FieldAccess

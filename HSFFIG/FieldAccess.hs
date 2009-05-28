@@ -14,6 +14,23 @@ module HSFFIG.FieldAccess (
 import Foreign
 import Foreign.C.Types
 
+-- |A multi-parameter class with functional dependencies is declared to enable access 
+-- to structures\/unions members. The functional dependencies @a b c | a c -> b@ specify 
+-- that type of /b/ (type of the member) depends entirely on the types /a/ (phantom type
+-- identifying structure\/union) and /c/ (phantom type identifying the member), 
+-- and there may be only one type of b for every possible combination of a and c.
+--
+-- Indeed:
+-- @
+-- struct a {
+--   int x;
+-- };
+-- struct b {
+--   float x;
+-- };
+-- @
+-- contain a member with the same name, but different types.
+
 class FieldAccess a b c | a c -> b where
   (==>) :: Ptr a -> c -> b
   (-->) :: Ptr a -> c -> IO b
