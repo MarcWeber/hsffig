@@ -17,10 +17,11 @@ import Foreign.C.Types
 -- |A multi-parameter class with functional dependencies is declared to enable access 
 -- to structures\/unions members. The functional dependencies @a b c | a c -> b@ specify 
 -- that type of /b/ (type of the member) depends entirely on the types /a/ (phantom type
--- identifying structure\/union) and /c/ (phantom type identifying the member), 
--- and there may be only one type of b for every possible combination of a and c.
+-- identifying structure\/union) and /c/ (phantom type identifying the member, a.k.a. member 
+-- selector), and there may be only one type of /b/ for every possible combination of /a/ and /c/.
 --
 -- Indeed:
+--
 -- @
 -- struct a {
 --   int x;
@@ -29,12 +30,37 @@ import Foreign.C.Types
 --   float x;
 -- };
 -- @
--- contain a member with the same name, but different types.
+--
+-- both structures contain a member with the same name, but different types.
+-- 
+-- HSFFIG will generate the following instances for the structures above:
+--
+-- @
+-- instance HSFFIG.FieldAccess.FieldAccess S_a ((CInt)) V_x where
+--   z --> V_x = (#peek __quote__(struct a), x) z
+--   (z, V_x) <-- v = (#poke __quote__(struct a), x) z v
+-- ...
+-- instance HSFFIG.FieldAccess.FieldAccess S_b ((CFloat)) V_x where
+--  z --> V_x = (#peek __quote__(struct b), x) z
+--  (z, V_x) <-- v = (#poke __quote__(struct b), x) z v
+-- @
+--
+-- That is, when the member identified by selector @V_x@ is fetched from 
+-- @struct a@ (@S_a@), an integer value is returned. But when the member with
+-- the same name is retrieved from @struct b@, a float value is returned.
 
 class FieldAccess a b c | a c -> b where
-  (==>) :: Ptr a -> c -> b
-  (-->) :: Ptr a -> c -> IO b
-  (<--) :: (Ptr a, c) -> b -> IO ()
+  (==>) :: Ptr a -> c -> b    -- ^retrieves a function reference from a member of structure @a@
+                              --  with name selector @c@ of type @b@ which in this case
+                              --  is a function type (thus '==>' is called in non-monadic
+                              --  context). Selector for @c@ may only be @X_@-prefixed.
+  (-->) :: Ptr a -> c -> IO b -- ^retrieves a value (mutable, thus monadic context is required) 
+                              --  from a member of structure @a@ with
+                              --  name selector @c@ of type @b@. Selector for @c@ may only be
+                              --  @V_@-prefixed.
+  (<--) :: (Ptr a, c) -> b -> IO () -- ^destructively updates a member of structure @a@
+                                    --  with name selector @c@ with value of type @b@.
+                                    --  Selector for @c@ may only be @V_@-prefixed.
   (==>) _ _ = error " illegal context for ==>"
   (-->) _ _ = error " illegal context for -->"
   (<--) _ _ = error " illegal context for <--"
