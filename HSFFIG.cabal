@@ -59,9 +59,4 @@ Main-is:        testparser.hs
 Hs-source-dirs: programs
 Other-modules:  C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds
 
-Executable:	splitter
-Main-is:	splitter.hs
-Hs-source-dirs:	programs
-Other-modules:	SPmain, SplitBounds
-
 
