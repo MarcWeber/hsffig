@@ -680,7 +680,7 @@ convarray (tss, d@(Declarator ps esd (cpi:cpis))) =
 -- of the type because underscores serve as separators between parts of the type
 -- definition.
 
-con2num con = "#const(" ++ map un2bq (show con) ++ ")@" where
+con2num con = "(#const(" ++ map un2bq (show con) ++ "))@" where
   un2bq '_' = '`'
   un2bq z = z
 
@@ -876,7 +876,7 @@ mapc2hs (TString at)
 -- Check whether the typestring represents an array type.
 
 isarrt at = let firstdim = takeWhile (/= '@') at in
-            (length firstdim > 0) && ("#const" `isPrefixOf` firstdim)
+            (length firstdim > 0) && ("(#const" `isPrefixOf` firstdim)
 
 -- Special version of the type map function considering conversion of arrays
 -- into pointers.
