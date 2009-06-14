@@ -33,12 +33,12 @@ $(LOC)/HS$(PKG)-$(VER).o : $(LOC)/libHS$(PKG)-$(VER).a
 
 $(LOC)/libHS$(PKG)-$(VER).a : $(BASE).hsc
 	$(ECHO) "include Makefile" > $(BASE)_depend
-	$(GHC) -package HSFFIG -M $(BASE)*.hs -optdep-f -optdep$(BASE)_depend
+	$(GHC) -package HSFFIG -M $(BASE)*.hs -dep-makefile $(BASE)_depend
 	$(GHC) -c $(BASE)_hsc.c
 	$(MAKE) -f $(BASE)_depend $(BASE)_S_t.o $(BASE)_S_n.o $(BASE)_S_d.o \
 		$(BASE)_C.o $(BASE)_S.o $(BASE).o
 	$(RM) -f $@
-	$(AR) cq $@ $(BASE)_hsc.o
+	$(AR) cq $@ $(BASE)_hsc.o $(EXTRA_OBJ)
 	$(FIND) . -name '$(BASE)*.o' | $(GREP) 'split/' | $(make-library)
 
 

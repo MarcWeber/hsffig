@@ -37,6 +37,7 @@ data PkgArg = Verbose
             | IncPath String
             | LibPath String
             | LibFile String
+            | ObjFile String
             | CppOpt  String
             | HelpMsg
             | NewHooks
@@ -61,6 +62,7 @@ pkgOpt = [
   Option ['I']  []                  (ReqArg IncPath "")  "include files location (may be multiple)",
   Option ['L']  []                  (ReqArg LibPath "")  "library files location (may be multiple)",
   Option ['l']  []                  (ReqArg LibFile "")  "library file to link (may be multiple)",
+  Option ['a']  []                  (ReqArg ObjFile "")  "object file to add (may be multiple)",
   Option ['c']  ["cpp"]             (ReqArg CppOpt  "")  "option for CPP (may be multiple)",
   Option ['V']  ["version"]         (NoArg ShowVn)       "show program version number",
   Option ['w']  ["package-version"] (ReqArg PkgVn dfVn)  "specify version of the package",
@@ -109,6 +111,7 @@ data OptInfo = OptInfo {
   libDirs :: [String],
   inclFiles :: [String],
   libFiles :: [String],
+  objFiles :: [String],
   cppOpts :: [String],
   pkgName :: String,
   pkgVersion :: String,
@@ -173,6 +176,7 @@ defaultOptInfo =
                  `ap` return []
                  `ap` return []
                  `ap` return []
+                 `ap` return []
                  `ap` return ""
                  `ap` return dfVn
                  `ap` return True   -- always use new hooks
@@ -199,6 +203,7 @@ updOptInfo oi (Gcc s)     = oi {gccPath = Just s}
 updOptInfo oi (Hsc2hs s)  = oi {hsc2hsPath = Just s}
 updOptInfo oi (IncPath s) = oi {inclDirs = s : (inclDirs oi)}
 updOptInfo oi (LibPath s) = oi {libDirs = s : (libDirs oi)}
+updOptInfo oi (ObjFile s) = oi {objFiles = s : (objFiles oi)}
 updOptInfo oi (LibFile s) = oi {libFiles = s : (libFiles oi)}
 updOptInfo oi (CppOpt  s) = oi {cppOpts  = s : (cppOpts  oi)}
 updOptInfo oi (PkgName s) = oi {pkgName = (map toUpper s)} 
@@ -470,6 +475,7 @@ main = do
   hPutStrLn mkffd $ "GCC = " ++ (fromJust $ gccPath dopt) ++ " " ++ intlv minusI " " ++ 
                intlv minusD " "
   hPutStrLn mkffd $ "GHC = " ++ (fromJust $ ghcPath dopt) ++ " " ++ intlv minusI " "
+  hPutStrLn mkffd $ "EXTRA_OBJ = " ++ intlv (map ("  " ++) (reverse (objFiles dopt))) " "
   mapM (\(s, m) -> hPutStrLn mkffd $ (map toUpper s) ++ " = " ++ fromJust m) progs
   hPutStrLn mkffd $ ""
   writeMakefile mkffd
@@ -490,7 +496,7 @@ main = do
   when (length (libDirs dopt) > 0) $ 
     hPutStrLn cabfd $ "Extra-lib-dirs:\n" ++ intlv (map ("  " ++) (reverse (libDirs dopt))) ",\n"
   when (length (libFiles dopt) > 0) $
-    hPutStrLn cabfd $ "Extra-libraries:\n" ++ intlv (map ("  " ++) (reverse ( libFiles dopt))) ",\n"
+    hPutStrLn cabfd $ "Extra-libraries:\n" ++ intlv (map ("  " ++) (reverse (libFiles dopt))) ",\n"
   hClose cabfd
 
 -- Create the Setup.hs file. It is mostly taken from the template. Choice
