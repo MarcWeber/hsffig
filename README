@@ -14,7 +14,7 @@ with Hugs as well, this has not been tested yet.
 
 For installation instructions, please read the file INSTALL.
 
-For documentation, please refer to http://haskell.org/hawiki/HsffigTutorial.
+For documentation, please refer to http://www.haskell.org/haskellwiki/HSFFIG/Tutorial.
 
 For possible directions of HSFFIG improvements, please read the file TODO.
 
