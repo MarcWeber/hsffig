@@ -1,5 +1,5 @@
 This is a source distribution of HSFFIG: yet another FFI binding
-autogeneration utility, version 1.0
+autogeneration utility, version 1.1.2
 
 The utility is built on the simple principle: given a C include
 file (.h) for a library, generate a Haskell module (or a collection 
