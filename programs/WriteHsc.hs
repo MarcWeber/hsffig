@@ -14,6 +14,7 @@ import Data.Maybe
 import Data.List
 import Control.Monad
 import System.IO
+import Control.Concurrent
 
 -- Name for the HSFFIG field access class, and module to import
 
@@ -117,19 +118,32 @@ writeConstAccess tus gcc (Just fn) =
          fmfnc = (finalizeModuleName (Just fn)) ++ "_C"
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfnc ++ "\n"
      writeSplitHeader [] fmfnc
-     mapM (oneconst fn gcc) cnsts 
+     testsyn (testConst (finalizeFileName (Just fn)) gcc) cnsts
      putStrLn $ "\n" ++ splitEnd ++ "\n"
      return ()
 
+testsyn fn [] = return ()
+
+testsyn fn cs = do
+  let nproc = 8
+  let h = take nproc cs
+      t = drop nproc cs
+  let nt = length h
+  mvs <- mapM (\_ -> newEmptyMVar) h
+  hx <- zipWithM (\c v -> forkOS (fn c >>= putMVar v)) h mvs
+  whx <- mapM takeMVar mvs
+  zipWithM oneconst whx h
+  testsyn fn t
+
+
 -- No import for #define alloca.
 
-oneconst _ _ "alloca" = return ()
+oneconst _ "alloca" = return ()
 
-oneconst fn gcc cnst = 
-  do rc <- testConst (finalizeFileName (Just fn)) cnst gcc
-     case rc of
-          ExitSuccess -> putStrLn $ "c_" ++ cnst ++ " = #const " ++ cnst
-          _ -> return ()
+oneconst rc cnst = 
+  case rc of
+    ExitSuccess -> putStrLn $ "c_" ++ cnst ++ " = #const " ++ cnst
+    _ -> return ()
 
 ---------------------------------------------------------------------------------------
 

@@ -44,18 +44,21 @@ Build-type:     Simple
 Executable:	ffipkg
 Main-is:	ffipkg.hs
 Hs-source-dirs:	programs
+Ghc-options:    -threaded
 Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, 
                 WriteHsc, Template, HsfUtils,
                 HGmain, SPmain, Makefile Setupfile SetupfileNew
 
 Executable:	hsffig
 Main-is:	hsffig.hs
+Ghc-options:    -threaded
 Hs-source-dirs:	programs
 Other-modules:	HGmain,
                 C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils
 
 Executable:     testparser
 Main-is:        testparser.hs
+Ghc-options:    -threaded
 Hs-source-dirs: programs
 Other-modules:  C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds
 
