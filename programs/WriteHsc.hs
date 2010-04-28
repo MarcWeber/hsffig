@@ -15,6 +15,7 @@ import Data.List
 import Control.Monad
 import System.IO
 import Control.Concurrent
+import GHC.Conc
 
 -- Name for the HSFFIG field access class, and module to import
 
@@ -110,27 +111,43 @@ writeSplitHeader imps mn = writeSplitHeaderX imps [] mn
 -- This requires knowledge of the header file name. Therefore if it was impossible
 -- to determine it, constants will not be included.
 
-writeConstAccess tus gcc Nothing = return ()
-writeConstAccess tus gcc (Just fn) = 
-  do let cnsts = Map.keys $ Map.filterWithKey constonly tus
+writeConstAccess _ _ Nothing = return ()
+writeConstAccess tus gcc mbfn@(Just fn) = do
+  let    cnsts = Map.keys $ Map.filterWithKey constonly tus
          constonly _ DictDef = True
          constonly _ _ = False
-         fmfnc = (finalizeModuleName (Just fn)) ++ "_C"
+  hPutStrLn stderr $ "using " ++ show numCapabilities ++ " cores"
+  nsect <- writeConstAccess' 0 cnsts gcc mbfn
+  let fmfnc = (finalizeModuleName (Just fn)) ++ "_C"
+      cmods = map (((fmfnc ++ "_") ++) . show) [0 .. (nsect - 1)]
+  putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfnc ++ "\n"
+  writeSplitHeaderX cmods cmods fmfnc
+  putStrLn $ "\n" ++ splitEnd ++ "\n"
+  return ()
+
+writeConstAccess' n [] _ _ = return n
+writeConstAccess' n tusd gcc Nothing = return 0
+writeConstAccess' n tusd gcc (Just fn) = 
+  do let cnsts = take 100 tusd
+         trem = drop 100 tusd
+         fmfnc = (finalizeModuleName (Just fn)) ++ "_C_" ++ show n
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfnc ++ "\n"
      writeSplitHeader [] fmfnc
      testsyn (testConst (finalizeFileName (Just fn)) gcc) cnsts
      putStrLn $ "\n" ++ splitEnd ++ "\n"
-     return ()
+     writeConstAccess' (n + 1) trem gcc (Just fn)
 
 testsyn fn [] = return ()
 
 testsyn fn cs = do
-  let nproc = 8
+  let nproc = 4
   let h = take nproc cs
       t = drop nproc cs
   let nt = length h
   mvs <- mapM (\_ -> newEmptyMVar) h
-  hx <- zipWithM (\c v -> forkOS (fn c >>= putMVar v)) h mvs
+  hx <- zipWithM (\c v -> forkOS (do
+    x <- fn c
+    putMVar v x)) h mvs
   whx <- mapM takeMVar mvs
   zipWithM oneconst whx h
   testsyn fn t
@@ -142,7 +159,7 @@ oneconst _ "alloca" = return ()
 
 oneconst rc cnst = 
   case rc of
-    ExitSuccess -> putStrLn $ "c_" ++ cnst ++ " = #const " ++ cnst
+    ExitSuccess -> (putStrLn $ "c_" ++ cnst ++ " = #const " ++ cnst) >> hFlush stdout
     _ -> return ()
 
 ---------------------------------------------------------------------------------------

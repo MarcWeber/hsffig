@@ -16,7 +16,7 @@ parts pred s = case dropWhile pred s of
 -- Run a compiler to check if a #define is good for inclusion into the
 -- produced .hsc code: a #define is a simple constant, w/o arguments.
 
-testConst fn gcc cnst = system cmdline
+testConst fn gcc cnst = rawSystem "sh" ["-c", cmdline]
   where cmdline = "echo '#include " ++ 
                   fn ++
                   "\nstatic int a = " ++

@@ -288,7 +288,7 @@ findExecVerb b s = do
 
 fileToFd :: FilePath -> IO Fd
 
-fileToFd s = openFd s WriteOnly (Just 420) defaultFileFlags
+fileToFd s = openFd s WriteOnly (Just 420) (defaultFileFlags {trunc = True})
 
 -- Redirect a Fd in a forked process.
 -- Credits to Donn Cave for the tip how to redirect stdout.
