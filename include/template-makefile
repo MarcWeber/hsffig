@@ -39,7 +39,7 @@ $(LOC)/libHS$(PKG)-$(VER).a : $(BASE).hsc
 		$(BASE)_C.o $(BASE)_S.o $(BASE).o
 	$(RM) -f $@
 	$(AR) cq $@ $(BASE)_hsc.o $(EXTRA_OBJ)
-	$(FIND) . -name '$(BASE)*.o' | $(GREP) 'split/' | $(make-library)
+	$(FIND) . -name '$(BASE)*.o' | $(GREP) -E 'split/|stub' | $(make-library)
 
 
 %.hi %.o : %.hs
