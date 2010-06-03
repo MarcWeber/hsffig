@@ -1040,6 +1040,7 @@ isvariadic ts = checktsrec isvr ts where
 isdirstruct ts = checktsrec isd ts where
   isd (TString  ('@':_)) = True
   isd (TString' ('@':_)) = True
+  isd (TString' "CJmpBuf") = True
   isd _ = False
 
 -- Output a FFI declaration of a function or a variable.
