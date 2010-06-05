@@ -116,7 +116,6 @@ writeConstAccess tus gcc mbfn@(Just fn) = do
   let    cnsts = Map.keys $ Map.filterWithKey constonly tus
          constonly _ DictDef = True
          constonly _ _ = False
-  hPutStrLn stderr $ "using " ++ show numCapabilities ++ " cores"
   nsect <- writeConstAccess' 0 cnsts gcc mbfn
   let fmfnc = (finalizeModuleName (Just fn)) ++ "_C"
       cmods = map (((fmfnc ++ "_") ++) . show) [0 .. (nsect - 1)]
