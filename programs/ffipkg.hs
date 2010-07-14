@@ -490,7 +490,7 @@ main = do
   hPutStrLn cabfd $ "Name: " ++ pkgName dopt
   hPutStrLn cabfd $ "Version: " ++ pkgVersion dopt
   hPutStrLn cabfd $ "Build-type: Custom"
-  hPutStrLn cabfd $ "Build-depends: base, HSFFIG"
+  hPutStrLn cabfd $ "Build-depends: base >= 4.0 && < 5, HSFFIG"
   hPutStrLn cabfd $ "Exposed-modules: " ++ head modlist
   hPutStrLn cabfd $ "Other-modules:\n" ++ intlv (map ("  " ++) (drop 1 modlist)) ",\n"
   when (length (libDirs dopt) > 0) $ 

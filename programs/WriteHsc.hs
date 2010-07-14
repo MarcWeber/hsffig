@@ -130,9 +130,11 @@ writeConstAccess' n tusd gcc (Just fn) =
   do let cnsts = take 100 tusd
          trem = drop 100 tusd
          fmfnc = (finalizeModuleName (Just fn)) ++ "_C_" ++ show n
+         finfn = finalizeFileName (Just fn)
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfnc ++ "\n"
      writeSplitHeader [] fmfnc
-     testsyn (testConst (finalizeFileName (Just fn)) gcc) cnsts
+     guess <- guessConsts finfn gcc cnsts >>= return . filter ((/= NoGuess) . fst . snd)
+     testsyn (testConst finfn gcc) (map fst guess)
      putStrLn $ "\n" ++ splitEnd ++ "\n"
      writeConstAccess' (n + 1) trem gcc (Just fn)
 
