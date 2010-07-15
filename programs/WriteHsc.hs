@@ -134,7 +134,12 @@ writeConstAccess' n tusd gcc (Just fn) =
      putStrLn $ "\n" ++ splitBegin ++ "/" ++ fmfnc ++ "\n"
      writeSplitHeader [] fmfnc
      guess <- guessConsts finfn gcc cnsts >>= return . filter ((/= NoGuess) . fst . snd)
-     testsyn (testConst finfn gcc) (map fst guess)
+     let vagues = filter ((== Vague) . fst . snd) guess
+         ints = filter ((== GuessInt) . fst . snd) guess
+         floats = filter ((== GuessFloat) . fst . snd) guess
+     mapM (oneconst ExitSuccess) (map fst ints)
+     mapM (oneconst ExitSuccess) (map fst floats)
+     testsyn (testConst finfn gcc) (map fst vagues)
      putStrLn $ "\n" ++ splitEnd ++ "\n"
      writeConstAccess' (n + 1) trem gcc (Just fn)
 

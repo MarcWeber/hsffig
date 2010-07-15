@@ -80,7 +80,7 @@ parts pred s = case dropWhile pred s of
 
 guessConsts fn gcc cnsts = do
   let delimc = '%'
-      onestr s = concat ["\"", s, "\"", [delimc], s]
+      onestr s = concat [[delimc], s]
       cnstrs = "#include " ++ fn ++ "\n" ++ (unlines $ map onestr cnsts)
       gccproc = CreateProcess {
                   cmdspec = RawCommand gcc ["-E", "-"]
@@ -117,6 +117,10 @@ tryparse x = let t = scanHeader x
                  p = runParser constant_expression (PState 0 Map.empty) "" t         
  in case (t, p) of
       (_, Left _) -> (NoGuess, [])
+      ([TKC_HEX _ _], Right _) -> (GuessInt, t)
+      ([TKC_OCT _ _], Right _) -> (GuessInt, t)
+      ([TKC_DEC _ _], Right _) -> (GuessInt, t)
+      ([TKC_EXP _ _], Right _) -> (GuessFloat, t)
       (_, Right _) -> (Vague, t)
 
 -- Run a compiler to check if a #define is good for inclusion into the
