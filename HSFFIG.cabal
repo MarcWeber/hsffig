@@ -35,7 +35,7 @@ Description:	Haskell FFI Binding Modules Generator (HSFFIG) is a tool that parse
                 .
                 Please note that @hsffig@ and @ffipkg@ will likely not work properly
                 with C++ include files.
-Build-depends:	base >=4 && < 5, parsec < 3 , Cabal>=1.5, filepath, unix, 
+Build-depends:	base, parsec, Cabal>=1.5, filepath, unix, 
                 process, containers, array, directory
 Exposed-modules: HSFFIG.FieldAccess
 Extensions:	MultiParamTypeClasses
@@ -45,7 +45,7 @@ Executable:	ffipkg
 Main-is:	ffipkg.hs
 Hs-source-dirs:	programs
 Ghc-options:    -threaded
-Other-modules:	C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, 
+Other-modules:	C_Lexer, ProcHdr, C_BNF, SplitBounds, 
                 WriteHsc, Template, HsfUtils,
                 HGmain, SPmain, Makefile Setupfile SetupfileNew
 
@@ -54,12 +54,12 @@ Main-is:	hsffig.hs
 Ghc-options:    -threaded
 Hs-source-dirs:	programs
 Other-modules:	HGmain,
-                C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils
+                C_Lexer, ProcHdr, C_BNF, SplitBounds, WriteHsc, Template, HsfUtils
 
 Executable:     testparser
 Main-is:        testparser.hs
 Ghc-options:    -threaded
 Hs-source-dirs: programs
-Other-modules:  C_Lexer, ProcHdr, TokenOps, C_BNF, SplitBounds
+Other-modules:  C_Lexer, ProcHdr, C_BNF, SplitBounds
 
 

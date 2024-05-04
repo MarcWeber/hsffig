@@ -1,8 +1,10 @@
 -- A Toplevel Driver to Produce a Haskell Package out of C Header File(s)
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Main where
 
 import Text.ParserCombinators.ReadP
+import Control.Exception
 import Distribution.Simple.BuildPaths
 import Distribution.Simple.Configure
 import Distribution.Compiler
@@ -139,7 +141,7 @@ strVersion s = let getv ls = [ r | (r,s) <- ls, s == "" ]
 -- Find and executable along the default PATH.
 
 findExec exn = do path <- getEnv "PATH"
-                  findFileAlong path exn exeExtension
+                  findFileAlong path exn System.Directory.exeExtension
 
 -- Check executable permissions.
 
@@ -148,7 +150,7 @@ chkExec :: Maybe FilePath -> IO Bool
 chkExec exn = do
   case exn of
     Nothing -> return False
-    Just exn' -> catch (getPermissions exn' >>= return . executable) (\e -> return False)
+    Just exn' -> catch (getPermissions exn' >>= return . executable) (\(e :: SomeException) -> return False)
 
 -- Print a message when the first argument is True
 
@@ -410,7 +412,7 @@ main = do
 -- to the preprocessor.
 
   infoMsgLn (beVerbose dopt) "Running gcc and producing the hsc file..."
-  (fd1, fd2) <- createPipe
+  (fd1, fd2) <- System.Posix.IO.createPipe
   hscfd <- fileToFd hscFile
   hscpid <- forkProcess $ redirFd fd1 0 $
                           redirFd fd2 (-1) $

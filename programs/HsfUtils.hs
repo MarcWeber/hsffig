@@ -25,6 +25,26 @@ data GuessType =
  |GuessFloat                    -- guessed a floating point constant
   deriving (Ord, Eq, Show)
 
+
+cP :: CmdSpec -> CreateProcess
+cP spec = CreateProcess {
+                  cmdspec = spec
+                 ,cwd = Nothing
+                 ,env = Nothing
+                 ,std_in = Inherit
+                 ,std_out = Inherit
+                 ,std_err = Inherit
+                 ,close_fds = True
+                 ,create_group = False
+                 ,delegate_ctlc = False
+                 ,detach_console = False
+                 ,create_new_console = False
+                 ,new_session = False
+                 ,child_group = Nothing
+                 ,child_user = Nothing
+                 ,use_process_jobs = False
+          }
+
 -- Utility: pipe processes together. Two StdStream's must be supplied: for pipeline's
 -- stdin and stdout. Stderr's of all processes are as set in the process creation
 -- descriptors. List of process handles is returned as well as handles for pipe ends.
@@ -82,24 +102,8 @@ guessConsts fn gcc cnsts = do
   let delimc = '%'
       onestr s = concat [[delimc], s]
       cnstrs = "#include " ++ fn ++ "\n" ++ (unlines $ map onestr cnsts)
-      gccproc = CreateProcess {
-                  cmdspec = RawCommand gcc ["-E", "-"]
-                 ,cwd = Nothing
-                 ,env = Nothing
-                 ,std_in = Inherit
-                 ,std_out = Inherit
-                 ,std_err = Inherit
-                 ,close_fds = True
-                }
-      grepproc = CreateProcess {
-                   cmdspec = RawCommand "grep" [[delimc]]
-                  ,cwd = Nothing
-                  ,env = Nothing
-                  ,std_in = Inherit
-                  ,std_out = Inherit
-                  ,std_err = Inherit
-                  ,close_fds = True
-                 }
+      gccproc = cP (RawCommand gcc ["-E", "-"])
+      grepproc = cP (RawCommand "grep" [[delimc]])
   (mbin, mbout, ps) <- runPipe CreatePipe CreatePipe [gccproc, grepproc]
   case (mbin, mbout) of
     (Just i, Just h) -> do

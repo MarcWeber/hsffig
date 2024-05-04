@@ -5,7 +5,6 @@ module ProcHdr where
 import C_Lexer
 import C_BNF
 import Text.ParserCombinators.Parsec
-import TokenOps
 import qualified Data.Map as Map
 
 -- Extract file name from a TKFILE token
